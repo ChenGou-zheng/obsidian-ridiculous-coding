@@ -1,0 +1,1690 @@
+# Obsidian Ridiculous Coding Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build an Obsidian plugin that adds blip/boom visual effects, screen shake, sound, XP/leveling system, and a control panel to the editor, porting the Ridiculous Coding experience from VS Code/Godot.
+
+**Architecture:** Plugin follows a modular architecture with `main.ts` as the coordinator. `EffectManager` handles CodeMirror 6 editor decorations (blip, boom, newline, shake). `XPService` manages XP persistence and leveling. `AudioService` uses the Web Audio API for sound playback. `SettingsTab` provides configuration UI. `ControlPanel` provides a sidebar view for quick controls.
+
+**Tech Stack:** TypeScript, Obsidian Plugin API (v0.15.0+), CodeMirror 6 (ViewPlugin/Decoration/WidgetType), Web Audio API, esbuild.
+
+## Global Constraints
+
+- Minimum Obsidian version: v0.15.0+ (CodeMirror 6)
+- Zero runtime dependencies (pure Web APIs)
+- Build tool: esbuild (Obsidian standard)
+- All media assets must be hosted within the plugin directory
+- `reducedEffects: true` must disable all animations, decorations, and sounds
+- XP system must continue working in reduced effects mode
+- Animations must respect `prefers-reduced-motion`
+- Rate limits: blip ≥ 20ms, boom ≥ 100ms; max 5 concurrent decorations per type
+
+---
+
+## File Structure
+
+```
+obsidian-ridiculous-coding/
+├── src/
+│   ├── main.ts              # Plugin entry: activate/deactivate, wire modules, commands
+│   ├── EffectManager.ts     # CM6 ViewPlugin: blip/boom/newline/shake decorations
+│   ├── XPService.ts         # XP tracking, leveling, persistence
+│   ├── AudioService.ts      # Web Audio API: load/play WAV, pitch control
+│   ├── SettingsTab.ts       # PluginSettingTab: all toggles/sliders
+│   ├── ControlPanel.ts      # ItemView: sidebar panel with status + quick controls
+│   ├── Fireworks.ts         # Canvas-based particle fireworks effect
+│   ├── types.ts             # Settings, XPData, SoundEvent, PanelMessage types
+│   └── constants.ts         # Default values, CSS class names, rate limits
+├── media/
+│   ├── blip.svg
+│   ├── boom.svg
+│   ├── newline.svg
+│   ├── font/GravityBold8.ttf
+│   └── sound/
+│       ├── blip.wav
+│       ├── boom.wav
+│       └── fireworks.wav
+├── manifest.json
+├── package.json
+├── esbuild.config.mjs
+├── tsconfig.json
+├── version-bump.mjs
+├── styles.css
+└── README.md
+```
+
+---
+
+### Task 1: Project Scaffolding & Media Assets
+
+**Files:**
+- Create: `package.json`
+- Create: `manifest.json`
+- Create: `tsconfig.json`
+- Create: `esbuild.config.mjs`
+- Create: `version-bump.mjs`
+- Create: `styles.css`
+- Create: `README.md`
+- Download: `media/blip.svg`, `media/boom.svg`, `media/newline.svg`
+- Download: `media/font/GravityBold8.ttf`
+- Download: `media/sound/blip.wav`, `media/sound/boom.wav`, `media/sound/fireworks.wav`
+
+**Description:** Bootstrap the Obsidian plugin project structure with build config, manifest, and all media assets from the reference VS Code extension.
+
+- [ ] **Step 1: Create `package.json`**
+
+```json
+{
+  "name": "obsidian-ridiculous-coding",
+  "version": "1.0.0",
+  "description": "Make your Obsidian editing experience 1000x more ridiculous with blips, booms, fireworks, XP and levels",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.6",
+    "@typescript-eslint/eslint-plugin": "5.29.0",
+    "@typescript-eslint/parser": "5.29.0",
+    "builtin-modules": "3.3.0",
+    "esbuild": "0.17.3",
+    "obsidian": "latest",
+    "tslib": "2.4.0",
+    "typescript": "4.7.4"
+  }
+}
+```
+
+- [ ] **Step 2: Create `manifest.json`**
+
+```json
+{
+  "id": "obsidian-ridiculous-coding",
+  "name": "Ridiculous Coding",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Blips, booms, fireworks, XP and levels — make your editing experience ridiculous!",
+  "author": "obsidian-ridiculous-coding",
+  "authorUrl": "",
+  "fundingUrl": "",
+  "isDesktopOnly": false
+}
+```
+
+- [ ] **Step 3: Create `tsconfig.json`**
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "inlineSourceMap": true,
+    "inlineSources": true,
+    "module": "ESNext",
+    "target": "ES6",
+    "allowJs": true,
+    "noImplicitAny": true,
+    "moduleResolution": "node",
+    "importHelpers": true,
+    "isolatedModules": true,
+    "strictNullChecks": true,
+    "lib": ["DOM", "ES5", "ES6", "ES7"]
+  },
+  "include": ["src/**/*.ts"]
+}
+```
+
+- [ ] **Step 4: Create `esbuild.config.mjs`**
+
+```javascript
+import esbuild from "esbuild";
+import process from "process";
+import builtins from "builtin-modules";
+
+const banner = `/*
+THIS IS A GENERATED/BUNDLED FILE BY ESBUILD
+*/
+`;
+
+const prod = process.argv[2] === "production";
+
+const context = await esbuild.context({
+  banner: { js: banner },
+  entryPoints: ["src/main.ts"],
+  bundle: true,
+  external: [
+    "obsidian",
+    "electron",
+    "@codemirror/autocomplete",
+    "@codemirror/collab",
+    "@codemirror/commands",
+    "@codemirror/language",
+    "@codemirror/lint",
+    "@codemirror/search",
+    "@codemirror/state",
+    "@codemirror/view",
+    "@lezer/common",
+    "@lezer/highlight",
+    "@lezer/lr",
+    ...builtins,
+  ],
+  format: "cjs",
+  target: "es2018",
+  logLevel: "info",
+  sourcemap: prod ? false : "inline",
+  treeShaking: true,
+  outfile: "main.js",
+});
+
+if (prod) {
+  await context.rebuild();
+  process.exit(0);
+} else {
+  await context.watch();
+}
+```
+
+- [ ] **Step 5: Create `version-bump.mjs`**
+
+```javascript
+import { readFileSync, writeFileSync } from "fs";
+
+const targetVersion = process.argv[2];
+
+// read minAppVersion from manifest.json and bump version to targetVersion
+let manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
+const { minAppVersion } = manifest;
+manifest.version = targetVersion;
+writeFileSync("manifest.json", JSON.stringify(manifest, null, "\t"));
+
+// update versions.json
+let versions = JSON.parse(readFileSync("versions.json", "utf8"));
+versions[targetVersion] = minAppVersion;
+writeFileSync("versions.json", JSON.stringify(versions, null, "\t"));
+```
+
+- [ ] **Step 6: Create `styles.css`**
+
+```css
+.ridiculous-coding-status-bar {
+  cursor: pointer;
+}
+
+.ridiculous-coding-status-bar:hover {
+  opacity: 0.8;
+}
+
+/* Screen shake applied to the CodeMirror scroller */
+.ridiculous-coding-shake {
+  /* transform is applied inline via JS */
+}
+
+/* Control panel styles */
+.ridiculous-coding-panel {
+  padding: 12px;
+}
+
+.ridiculous-coding-panel h3 {
+  margin: 0 0 8px 0;
+  font-size: var(--font-ui-medium);
+}
+
+.ridiculous-coding-panel .progress-bar {
+  height: 8px;
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.ridiculous-coding-panel .progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--interactive-accent), #ff6b6b);
+  transition: width 0.3s ease;
+}
+
+.ridiculous-coding-panel .xp-text {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.ridiculous-coding-panel .toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.ridiculous-coding-panel button {
+  margin-top: 8px;
+}
+
+/* Fireworks overlay */
+.ridiculous-coding-fireworks {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--layer-popover);
+}
+```
+
+- [ ] **Step 7: Create `README.md`**
+
+```markdown
+# Ridiculous Coding for Obsidian
+
+Transform your Obsidian editing into an epic adventure! Blips, booms, screen shake, XP levels, and fireworks — every keystroke counts.
+
+## Features
+
+- **Blips** — Colorful animations when typing
+- **Booms** — Explosive effects when deleting
+- **Screen Shake** — Editor jitter that responds to typing
+- **Newline Animations** — Special effects for line breaks
+- **Fireworks** — Celebration on level up
+- **XP & Leveling** — Earn XP for every character typed
+- **Sounds** — Satisfying audio feedback
+
+## Installation
+
+1. Download from Community Plugins (once published)
+2. Enable in Community Plugins settings
+3. Customize effects in Settings → Ridiculous Coding
+
+## Manual Installation
+
+Copy `main.js`, `manifest.json`, `styles.css`, and the `media/` folder to your vault's `.obsidian/plugins/obsidian-ridiculous-coding/` directory.
+```
+
+- [ ] **Step 8: Download media assets from reference repos**
+
+```bash
+# Create directories
+mkdir -p media/font media/sound
+
+# Download SVGs from VS Code extension repo
+curl -L -o media/blip.svg https://raw.githubusercontent.com/merenut/RediculousCoding/main/media/blip.svg
+curl -L -o media/boom.svg https://raw.githubusercontent.com/merenut/RediculousCoding/main/media/boom.svg
+curl -L -o media/newline.svg https://raw.githubusercontent.com/merenut/RediculousCoding/main/media/newline.svg
+
+# Download font
+curl -L -o media/font/GravityBold8.ttf https://raw.githubusercontent.com/merenut/RediculousCoding/main/media/font/GravityBold8.ttf
+
+# Download sound files
+curl -L -o media/sound/blip.wav https://raw.githubusercontent.com/merenut/RediculousCoding/main/media/sound/blip.wav
+curl -L -o media/sound/boom.wav https://raw.githubusercontent.com/merenut/RediculousCoding/main/media/sound/boom.wav
+curl -L -o media/sound/fireworks.wav https://raw.githubusercontent.com/merenut/RediculousCoding/main/media/sound/fireworks.wav
+```
+
+- [ ] **Step 9: Verify build**
+
+```bash
+npm install
+npm run build
+# Expected: esbuild bundles src/main.ts → main.js without errors
+```
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add -A
+git commit -m "chore: scaffold project and add media assets"
+```
+
+---
+
+### Task 2: Types & Constants
+
+**Files:**
+- Create: `src/types.ts`
+- Create: `src/constants.ts`
+
+**Interfaces:**
+- Produces: `Settings` interface, `XPData` interface, `SoundEvent` type, `PanelMessage` types, `DEFAULT_SETTINGS` constant, `RATE_LIMITS` constant
+
+- [ ] **Step 1: Create `src/types.ts`**
+
+```typescript
+import { Plugin } from "obsidian";
+
+export interface Settings {
+  blips: boolean;
+  explosions: boolean;
+  chars: boolean;
+  shake: boolean;
+  shakeAmplitude: number;
+  sound: boolean;
+  fireworks: boolean;
+  baseXp: number;
+  enableStatusBar: boolean;
+  reducedEffects: boolean;
+}
+
+export interface XPData {
+  xp: number;
+  level: number;
+  xpNextAbs: number;
+  xpLevelStart: number;
+}
+
+export type SoundEvent =
+  | { type: "blip"; pitch: number }
+  | { type: "boom" }
+  | { type: "fireworks" };
+
+export interface EditorChangeInfo {
+  insertedText: string;
+  removedLength: number;
+  isInsert: boolean;
+  isDelete: boolean;
+  hasNewline: boolean;
+}
+
+export type PanelMessageFromExt =
+  | { type: "state"; xp: number; level: number; xpNext: number; xpLevelStart: number }
+  | { type: "fireworks" }
+  | { type: "settings"; settings: Settings };
+
+export type PanelMessageToExt =
+  | { type: "ready" }
+  | { type: "toggle"; key: keyof Settings; value: boolean }
+  | { type: "resetXp" };
+```
+
+- [ ] **Step 2: Create `src/constants.ts`**
+
+```typescript
+import { Settings } from "./types";
+
+export const DEFAULT_SETTINGS: Settings = {
+  blips: true,
+  explosions: true,
+  chars: true,
+  shake: true,
+  shakeAmplitude: 6,
+  sound: true,
+  fireworks: true,
+  baseXp: 50,
+  enableStatusBar: true,
+  reducedEffects: false,
+};
+
+export const RATE_LIMITS = {
+  BLIP_MS: 20,
+  BOOM_MS: 100,
+  MAX_DECORATIONS_PER_TYPE: 5,
+  MAX_SHAKE_TOTAL_MS: 400,
+  SHAKE_FRAME_MS: 50,
+} as const;
+
+export const XP_FORMULA = {
+  BASE_XP: 50,
+} as const;
+
+export const PLUGIN_ID = "obsidian-ridiculous-coding";
+export const STATUS_BAR_CLASS = "ridiculous-coding-status-bar";
+export const PANEL_VIEW_TYPE = "ridiculous-coding-panel";
+export const FIREWORKS_CLASS = "ridiculous-coding-fireworks";
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/types.ts src/constants.ts
+git commit -m "feat: add types and constants"
+```
+
+---
+
+### Task 3: XP Service
+
+**Files:**
+- Create: `src/XPService.ts`
+
+**Interfaces:**
+- Consumes: `XPData`, `Settings.baseXp`, `Plugin.loadData()` / `Plugin.saveData()`
+- Produces: `class XPService { xp, level, xpNextAbs, xpStartOfLevel, addXp(n): boolean, reset(), getProgress(): {current, max}, setBaseXp(n) }`
+
+- [ ] **Step 1: Create `src/XPService.ts`**
+
+```typescript
+import { Settings, XPData } from "./types";
+
+export class XPService {
+  private plugin: any; // Obsidian Plugin instance
+  private baseXp: number;
+  xp: number = 0;
+  level: number = 1;
+  xpNextAbs: number;
+  xpLevelStart: number = 0;
+
+  constructor(plugin: any, baseXp: number) {
+    this.plugin = plugin;
+    this.baseXp = baseXp;
+    const saved = plugin.settings as Settings & XPData;
+    this.xp = (saved as any).xp ?? 0;
+    this.level = (saved as any).level ?? 1;
+    this.xpLevelStart = (saved as any).xpLevelStart ?? 0;
+    this.xpNextAbs = (saved as any).xpNextAbs ?? 2 * baseXp;
+  }
+
+  get progress(): { current: number; max: number } {
+    const max = this.xpNextAbs - this.xpLevelStart;
+    return { current: this.xp - this.xpLevelStart, max: Math.max(1, max) };
+  }
+
+  addXp(n: number): boolean {
+    this.xp += n;
+    let leveledUp = false;
+    if (this.xp >= this.xpNextAbs) {
+      this.level += 1;
+      this.xpLevelStart = this.xp;
+      this.xpNextAbs = this.xp + Math.round((this.baseXp * this.level) / 10) * 10;
+      leveledUp = true;
+    }
+    this.save();
+    return leveledUp;
+  }
+
+  reset(): void {
+    this.level = 1;
+    this.xp = 0;
+    this.xpLevelStart = 0;
+    this.xpNextAbs = 2 * this.baseXp;
+    this.save();
+  }
+
+  setBaseXp(base: number): void {
+    this.baseXp = base;
+    if (this.level <= 1 && this.xp === 0) {
+      this.xpNextAbs = 2 * this.baseXp;
+    } else if (this.xp >= this.xpNextAbs) {
+      this.xpNextAbs = this.xp + Math.round((this.baseXp * this.level) / 10) * 10;
+    }
+    this.save();
+  }
+
+  private save(): void {
+    const data = this.plugin.settings as any;
+    data.xp = this.xp;
+    data.level = this.level;
+    data.xpNextAbs = this.xpNextAbs;
+    data.xpLevelStart = this.xpLevelStart;
+    this.plugin.saveSettings();
+  }
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/XPService.ts
+git commit -m "feat: add XP service with leveling and persistence"
+```
+
+---
+
+### Task 4: Settings Tab
+
+**Files:**
+- Create: `src/SettingsTab.ts`
+
+**Interfaces:**
+- Consumes: `Settings`, `DEFAULT_SETTINGS`, `Plugin.registerSettingsTab()`, `XPService`
+- Produces: `class RidiculousCodingSettingTab extends PluginSettingTab`
+
+- [ ] **Step 1: Create `src/SettingsTab.ts`**
+
+```typescript
+import { App, PluginSettingTab, Setting } from "obsidian";
+import { Settings } from "./types";
+import { DEFAULT_SETTINGS } from "./constants";
+import { XPService } from "./XPService";
+
+export class RidiculousCodingSettingTab extends PluginSettingTab {
+  private plugin: any;
+  private xpService: XPService;
+
+  constructor(app: App, plugin: any, xpService: XPService) {
+    super(app, plugin);
+    this.plugin = plugin;
+    this.xpService = xpService;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    containerEl.createEl("h2", { text: "Ridiculous Coding" });
+
+    new Setting(containerEl)
+      .setName("Blip effects")
+      .setDesc("Show animations when typing characters")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.blips)
+          .onChange(async (value) => {
+            this.plugin.settings.blips = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Explosion effects")
+      .setDesc("Show boom effects when deleting")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.explosions)
+          .onChange(async (value) => {
+            this.plugin.settings.explosions = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Character labels")
+      .setDesc("Overlay the typed character label with effects")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.chars)
+          .onChange(async (value) => {
+            this.plugin.settings.chars = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Screen shake")
+      .setDesc("Enable screen shake effects")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.shake)
+          .onChange(async (value) => {
+            this.plugin.settings.shake = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Shake amplitude")
+      .setDesc("Maximum shake displacement in pixels (0-32)")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 32, 1)
+          .setValue(this.plugin.settings.shakeAmplitude)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.shakeAmplitude = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Sound effects")
+      .setDesc("Play sounds for blips, booms, and fireworks")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.sound)
+          .onChange(async (value) => {
+            this.plugin.settings.sound = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Fireworks")
+      .setDesc("Celebrate level-ups with fireworks animation")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.fireworks)
+          .onChange(async (value) => {
+            this.plugin.settings.fireworks = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Base XP")
+      .setDesc("Base XP value used in level-up curve (10-200)")
+      .addSlider((slider) =>
+        slider
+          .setLimits(10, 200, 5)
+          .setValue(this.plugin.settings.baseXp)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.baseXp = value;
+            this.xpService.setBaseXp(value);
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Status bar")
+      .setDesc("Show level and XP progress in the status bar")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.enableStatusBar)
+          .onChange(async (value) => {
+            this.plugin.settings.enableStatusBar = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Reduced effects mode")
+      .setDesc("Disable all visual effects and sounds for accessibility. XP system still works.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.reducedEffects)
+          .onChange(async (value) => {
+            this.plugin.settings.reducedEffects = value;
+            await this.plugin.saveSettings();
+            if (value) {
+              // Clear all decorations
+              this.plugin.clearAllDecorations?.();
+            }
+          })
+      );
+
+    containerEl.createEl("hr");
+
+    new Setting(containerEl)
+      .setName("Reset XP")
+      .setDesc("Reset your experience points and level back to 1")
+      .addButton((button) =>
+        button
+          .setButtonText("Reset")
+          .setWarning()
+          .onClick(() => {
+            this.xpService.reset();
+            this.plugin.updateStatusBar?.();
+            button.setButtonText("Reset ✓");
+            setTimeout(() => button.setButtonText("Reset"), 2000);
+          })
+      );
+  }
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/SettingsTab.ts
+git commit -m "feat: add settings tab with all controls"
+```
+
+---
+
+### Task 5: Audio Service
+
+**Files:**
+- Create: `src/AudioService.ts`
+
+**Interfaces:**
+- Consumes: `SoundEvent`, `Plugin.app.vault.adapter` (resource loading)
+- Produces: `class AudioService { configure(): Promise<void>, play(event: SoundEvent): void, isEnabled: boolean }`
+
+- [ ] **Step 1: Create `src/AudioService.ts`**
+
+```typescript
+import { SoundEvent } from "./types";
+
+export class AudioService {
+  private audioContext: AudioContext | null = null;
+  private buffers: Map<string, AudioBuffer> = new Map();
+  private plugin: any;
+  isEnabled: boolean = true;
+
+  constructor(plugin: any) {
+    this.plugin = plugin;
+  }
+
+  async configure(): Promise<void> {
+    try {
+      this.audioContext = new AudioContext();
+      await this.loadSound("blip", "media/sound/blip.wav");
+      await this.loadSound("boom", "media/sound/boom.wav");
+      await this.loadSound("fireworks", "media/sound/fireworks.wav");
+    } catch (e) {
+      console.warn("Ridiculous Coding: Audio initialization failed", e);
+      this.audioContext = null;
+    }
+  }
+
+  private async loadSound(name: string, path: string): Promise<void> {
+    if (!this.audioContext) return;
+    try {
+      const response = await fetch(path);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      this.buffers.set(name, audioBuffer);
+    } catch (e) {
+      console.warn(`Ridiculous Coding: Failed to load sound "${name}"`, e);
+    }
+  }
+
+  play(event: SoundEvent): void {
+    if (!this.isEnabled || !this.audioContext) return;
+
+    // Resume context if suspended (browser autoplay policy)
+    if (this.audioContext.state === "suspended") {
+      this.audioContext.resume();
+    }
+
+    let bufferName: string;
+    let playbackRate: number = 1.0;
+
+    switch (event.type) {
+      case "blip":
+        bufferName = "blip";
+        playbackRate = event.pitch;
+        break;
+      case "boom":
+        bufferName = "boom";
+        break;
+      case "fireworks":
+        bufferName = "fireworks";
+        break;
+    }
+
+    const buffer = this.buffers.get(bufferName);
+    if (!buffer) return;
+
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = playbackRate;
+
+    const gainNode = this.audioContext.createGain();
+    gainNode.gain.value = bufferName === "fireworks" ? 0.5 : 0.3;
+
+    source.connect(gainNode);
+    gainNode.connect(this.audioContext.destination);
+    source.start(0);
+  }
+
+  dispose(): void {
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+    this.buffers.clear();
+  }
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/AudioService.ts
+git commit -m "feat: add audio service with Web Audio API"
+```
+
+---
+
+### Task 6: Effect Manager — Core Decorations (Blip, Boom, Newline)
+
+**Files:**
+- Create: `src/EffectManager.ts`
+
+**Interfaces:**
+- Consumes: `Settings`, `RATE_LIMITS`, `EditorView`, `ViewPlugin`, `Decoration`, `WidgetType` (from CodeMirror 6)
+- Produces: Shows visual decorations on the CodeMirror editor
+
+- [ ] **Step 1: Create `src/EffectManager.ts`**
+
+```typescript
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  ViewPlugin,
+  ViewUpdate,
+  WidgetType,
+} from "@codemirror/view";
+import { RATE_LIMITS } from "./constants";
+import { Settings } from "./types";
+
+// ── Widget: Floating char label (blip/boom text) ──
+
+class FloatingLabelWidget extends WidgetType {
+  private text: string;
+  private color: string;
+  private fontSize: number;
+
+  constructor(text: string, color: string, fontSize: number = 18) {
+    super();
+    this.text = text;
+    this.color = color;
+    this.fontSize = fontSize;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "rc-floating-label";
+    span.textContent = this.text;
+    span.style.color = this.color;
+    span.style.fontSize = `${this.fontSize}px`;
+    span.style.fontWeight = "bold";
+    span.style.fontFamily = "monospace";
+    span.style.position = "absolute";
+    span.style.pointerEvents = "none";
+    span.style.zIndex = "1000";
+    span.style.transform = "translateY(-1.1em) scale(1.6)";
+    span.style.transformOrigin = "left bottom";
+    span.style.transition = "transform 0.4s ease-out, opacity 0.4s ease-out";
+    // Trigger float animation on next frame
+    requestAnimationFrame(() => {
+      span.style.transform = "translateY(-2.5em) scale(1.0)";
+      span.style.opacity = "0";
+    });
+    // Remove from DOM after animation
+    setTimeout(() => span.remove(), 450);
+    return span;
+  }
+}
+
+// ── Widget: Icon decoration (blip/boom/newline SVG icon) ──
+
+class IconWidget extends WidgetType {
+  private iconName: string;
+
+  constructor(iconName: string) {
+    super();
+    this.iconName = iconName;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const span = document.createElement("span");
+    span.className = `rc-icon rc-icon-${this.iconName}`;
+    span.style.display = "inline-block";
+    span.style.width = "0";
+    span.style.height = "1em";
+    span.style.position = "relative";
+    span.style.pointerEvents = "none";
+    return span;
+  }
+}
+
+// ── ViewPlugin ──
+
+interface PendingEffect {
+  type: "blip" | "boom" | "newline";
+  pos: number;
+  charLabel?: string;
+}
+
+class RidiculousViewPlugin {
+  decorations: DecorationSet = Decoration.none;
+  private view: EditorView;
+  private settings: Settings;
+  private pendingEffects: PendingEffect[] = [];
+  private animFrameId: number | null = null;
+  private lastBlipTime: number = 0;
+  private lastBoomTime: number = 0;
+
+  // Color generation matching the Godot original
+  private static randomGodotColor(): string {
+    const r = Math.min(255, Math.round(Math.random() * 510));
+    const g = Math.min(255, Math.round(Math.random() * 510));
+    const b = Math.min(255, Math.round(Math.random() * 510));
+    return `rgb(${Math.min(255, r)}, ${Math.min(255, g)}, ${Math.min(255, b)})`;
+  }
+
+  constructor(view: EditorView, settings: Settings) {
+    this.view = view;
+    this.settings = settings;
+  }
+
+  update(update: ViewUpdate): void {
+    if (!update.docChanged) return;
+
+    for (const tr of update.transactions) {
+      for (const change of tr.changes.iterChanges()) {
+        const insertedText = change.inserted.toString();
+        const removedLength = change.removed.length;
+
+        if (insertedText.length > 0 && !this.settings.reducedEffects) {
+          this.handleInsert(change.to, insertedText);
+        }
+
+        if (removedLength > 0 && !this.settings.reducedEffects) {
+          this.handleDelete(change.from, change.removed);
+        }
+      }
+    }
+  }
+
+  private handleInsert(pos: number, text: string): void {
+    const now = Date.now();
+    if (now - this.lastBlipTime < RATE_LIMITS.BLIP_MS) return;
+    this.lastBlipTime = now;
+
+    if (text.includes("\n") && this.settings.blips) {
+      this.pendingEffects.push({ type: "newline", pos });
+    }
+
+    if (this.settings.blips) {
+      const charLabel = this.settings.chars ? this.sanitizeLabel(text[0]) : undefined;
+      this.pendingEffects.push({ type: "blip", pos, charLabel });
+    }
+
+    this.scheduleAnimation();
+  }
+
+  private handleDelete(pos: number, removed: any): void {
+    const now = Date.now();
+    if (now - this.lastBoomTime < RATE_LIMITS.BOOM_MS) return;
+    this.lastBoomTime = now;
+
+    if (this.settings.explosions) {
+      const charLabel = this.settings.chars ? "BACKSPACE" : undefined;
+      this.pendingEffects.push({ type: "boom", pos, charLabel });
+    }
+
+    this.scheduleAnimation();
+  }
+
+  private scheduleAnimation(): void {
+    if (this.animFrameId !== null) return;
+    this.animFrameId = requestAnimationFrame(() => this.applyEffects());
+  }
+
+  private applyEffects(): void {
+    this.animFrameId = null;
+    if (this.pendingEffects.length === 0) return;
+
+    const decorations: any[] = [];
+
+    for (const effect of this.pendingEffects) {
+      const pos = Math.min(effect.pos, this.view.state.doc.length);
+      if (pos >= this.view.state.doc.length) continue;
+
+      const range = this.view.state.doc.lineAt(pos);
+      const lineStart = range.from;
+      const cursorPos = pos;
+
+      switch (effect.type) {
+        case "blip": {
+          const color = RidiculousViewPlugin.randomGodotColor();
+          if (effect.charLabel && this.settings.chars) {
+            const widget = new FloatingLabelWidget(effect.charLabel, color);
+            decorations.push(
+              Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
+            );
+          }
+          const iconWidget = new IconWidget("blip");
+          decorations.push(
+            Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
+          );
+          break;
+        }
+        case "boom": {
+          if (effect.charLabel && this.settings.chars) {
+            const color = RidiculousViewPlugin.randomGodotColor();
+            const widget = new FloatingLabelWidget(effect.charLabel, color);
+            decorations.push(
+              Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
+            );
+          }
+          const iconWidget = new IconWidget("boom");
+          decorations.push(
+            Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
+          );
+          break;
+        }
+        case "newline": {
+          const iconWidget = new IconWidget("newline");
+          decorations.push(
+            Decoration.widget({ widget: iconWidget, side: -1 }).range(pos, pos)
+          );
+          break;
+        }
+      }
+    }
+
+    this.decorations = Decoration.set(decorations);
+    this.pendingEffects = [];
+
+    // Clear decorations after a short delay
+    setTimeout(() => {
+      this.decorations = Decoration.none;
+      this.view.dispatch();
+    }, 400);
+  }
+
+  private sanitizeLabel(ch: string): string {
+    if (ch === "\n") return "";
+    if (ch === "\t") return "↹";
+    if (ch.trim() === "") return "SPACE";
+    return ch;
+  }
+
+  clearDecorations(): void {
+    this.decorations = Decoration.none;
+    this.pendingEffects = [];
+    if (this.animFrameId !== null) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = null;
+    }
+  }
+
+  destroy(): void {
+    this.clearDecorations();
+  }
+}
+
+// ── Factory function ──
+
+export function createRidiculousPlugin(settings: Settings) {
+  return ViewPlugin.fromClass(
+    (view: EditorView) => new RidiculousViewPlugin(view, settings),
+    {
+      decorations: (plugin: RidiculousViewPlugin) => plugin.decorations,
+    }
+  );
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/EffectManager.ts
+git commit -m "feat: add core EffectManager with blip, boom, newline decorations"
+```
+
+---
+
+### Task 7: Effect Manager — Screen Shake
+
+**Files:**
+- Modify: `src/EffectManager.ts`
+
+- [ ] **Step 1: Add screen shake functionality to EffectManager.ts**
+
+Add the `shake()` method and integrate it into the `RidiculousViewPlugin` class. Add after the `applyEffects()` method:
+
+```typescript
+// ── Screen Shake ──
+
+private shakeEndAt: number = 0;
+private shakeTimerId: number | null = null;
+private shakeDOM: HTMLElement | null = null;
+
+triggerShake(extendMs: number): void {
+  if (!this.settings.shake) return;
+
+  const now = Date.now();
+  const maxEnd = now + RATE_LIMITS.MAX_SHAKE_TOTAL_MS;
+  this.shakeEndAt = Math.min(
+    Math.max(this.shakeEndAt, now + extendMs),
+    maxEnd
+  );
+
+  if (!this.shakeDOM) {
+    this.shakeDOM = this.view.scrollDOM;
+  }
+
+  if (this.shakeTimerId === null) {
+    this.startShakeLoop();
+  }
+}
+
+private startShakeLoop(): void {
+  const tick = () => {
+    const now = Date.now();
+    if (now >= this.shakeEndAt) {
+      this.shakeTimerId = null;
+      if (this.shakeDOM) {
+        this.shakeDOM.style.transform = "";
+      }
+      return;
+    }
+
+    const amplitude = this.settings.shakeAmplitude;
+    const angle = Math.random() * Math.PI * 2;
+    const dx = Math.round(Math.cos(angle) * amplitude);
+    const dy = Math.round(Math.sin(angle) * amplitude);
+
+    if (this.shakeDOM) {
+      this.shakeDOM.style.transform = `translate(${dx}px, ${dy}px)`;
+      this.shakeDOM.style.transition = "transform 0.03s linear";
+    }
+
+    this.shakeTimerId = window.setTimeout(tick, RATE_LIMITS.SHAKE_FRAME_MS);
+  };
+
+  tick();
+}
+```
+
+Update the `handleInsert` call:
+```typescript
+// In handleInsert, add after the blip/newline logic:
+if (this.settings.shake) {
+  this.triggerShake(text.includes("\n") ? 140 : 120);
+}
+```
+
+Update the `handleDelete` call:
+```typescript
+// In handleDelete, add after the boom logic:
+if (this.settings.shake) {
+  this.triggerShake(180);
+}
+```
+
+Add to `clearDecorations()`:
+```typescript
+if (this.shakeTimerId !== null) {
+  clearTimeout(this.shakeTimerId);
+  this.shakeTimerId = null;
+}
+if (this.shakeDOM) {
+  this.shakeDOM.style.transform = "";
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/EffectManager.ts
+git commit -m "feat: add screen shake to EffectManager"
+```
+
+---
+
+### Task 8: Fireworks Effect
+
+**Files:**
+- Create: `src/Fireworks.ts`
+
+**Interfaces:**
+- Consumes: `Settings`, DOM container for canvas
+- Produces: `class Fireworks { show(): void, dispose(): void }`
+
+- [ ] **Step 1: Create `src/Fireworks.ts`**
+
+```typescript
+import { FIREWORKS_CLASS } from "./constants";
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
+}
+
+export class Fireworks {
+  private canvas: HTMLCanvasElement | null = null;
+  private ctx: CanvasRenderingContext2D | null = null;
+  private particles: Particle[] = [];
+  private animId: number | null = null;
+  private container: HTMLElement | null = null;
+
+  show(): void {
+    if (this.container) return; // Already showing
+
+    this.container = document.createElement("div");
+    this.container.className = FIREWORKS_CLASS;
+
+    this.canvas = document.createElement("canvas");
+    this.canvas.style.width = "100%";
+    this.canvas.style.height = "100%";
+    this.container.appendChild(this.canvas);
+    document.body.appendChild(this.container);
+
+    this.canvas.width = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+    this.ctx = this.canvas.getContext("2d")!;
+
+    // Spawn initial bursts
+    this.spawnBurst(window.innerWidth * 0.3, window.innerHeight * 0.3);
+    this.spawnBurst(window.innerWidth * 0.7, window.innerHeight * 0.2);
+    this.spawnBurst(window.innerWidth * 0.5, window.innerHeight * 0.4);
+
+    this.animate();
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => this.hide(), 3000);
+  }
+
+  private spawnBurst(x: number, y: number): void {
+    const colors = ["#ff6b6b", "#feca57", "#48dbfb", "#ff9ff3", "#54a0ff", "#5f27cd"];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    for (let i = 0; i < 40; i++) {
+      const angle = (Math.PI * 2 * i) / 40 + (Math.random() - 0.5) * 0.3;
+      const speed = 2 + Math.random() * 4;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 0,
+        maxLife: 40 + Math.random() * 30,
+        color,
+        size: 2 + Math.random() * 3,
+      });
+    }
+  }
+
+  private animate = (): void => {
+    if (!this.ctx || !this.canvas) return;
+
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    this.particles = this.particles.filter((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.05; // gravity
+      p.vx *= 0.98; // drag
+      p.life++;
+
+      if (p.life >= p.maxLife) return false;
+
+      const alpha = 1 - p.life / p.maxLife;
+      this.ctx!.globalAlpha = alpha;
+      this.ctx!.fillStyle = p.color;
+      this.ctx!.beginPath();
+      this.ctx!.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+      this.ctx!.fill();
+
+      return true;
+    });
+
+    if (this.particles.length > 0) {
+      this.animId = requestAnimationFrame(this.animate);
+    } else {
+      this.hide();
+    }
+  };
+
+  hide(): void {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+    this.particles = [];
+    if (this.container) {
+      this.container.remove();
+      this.container = null;
+    }
+    this.canvas = null;
+    this.ctx = null;
+  }
+
+  dispose(): void {
+    this.hide();
+  }
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/Fireworks.ts
+git commit -m "feat: add canvas-based fireworks particle effect"
+```
+
+---
+
+### Task 9: Control Panel (Sidebar View)
+
+**Files:**
+- Create: `src/ControlPanel.ts`
+
+**Interfaces:**
+- Consumes: `Settings`, `XPService`, `PLUGIN_ID`, `PANEL_VIEW_TYPE`
+- Produces: `class RidiculousCodingPanel extends ItemView`
+
+- [ ] **Step 1: Create `src/ControlPanel.ts`**
+
+```typescript
+import { ItemView, WorkspaceLeaf } from "obsidian";
+import { Settings } from "./types";
+import { XPService } from "./XPService";
+import { PANEL_VIEW_TYPE } from "./constants";
+
+export class RidiculousCodingPanel extends ItemView {
+  private xpService: XPService;
+  private settings: Settings;
+  private onToggle: (key: keyof Settings, value: boolean) => void;
+  private onResetXp: () => void;
+
+  constructor(
+    leaf: WorkspaceLeaf,
+    xpService: XPService,
+    settings: Settings,
+    onToggle: (key: keyof Settings, value: boolean) => void,
+    onResetXp: () => void
+  ) {
+    super(leaf);
+    this.xpService = xpService;
+    this.settings = settings;
+    this.onToggle = onToggle;
+    this.onResetXp = onResetXp;
+  }
+
+  getViewType(): string {
+    return PANEL_VIEW_TYPE;
+  }
+
+  getDisplayText(): string {
+    return "Ridiculous Coding";
+  }
+
+  getIcon(): string {
+    return "rocket";
+  }
+
+  async onOpen(): Promise<void> {
+    this.render();
+  }
+
+  render(): void {
+    const container = this.containerEl.children[1];
+    container.empty();
+    container.addClass("ridiculous-coding-panel");
+
+    // Level display
+    const header = container.createEl("h3", { text: `🚀 Level ${this.xpService.level}` });
+
+    // XP Progress
+    const prog = this.xpService.progress;
+    const progressContainer = container.createDiv({ cls: "progress-bar" });
+    const progressFill = progressContainer.createDiv({ cls: "progress-bar-fill" });
+    progressFill.style.width = `${(prog.current / prog.max) * 100}%`;
+
+    const xpText = container.createDiv({ cls: "xp-text" });
+    xpText.setText(`${prog.current} / ${prog.max} XP`);
+
+    container.createEl("hr");
+
+    // Toggle rows
+    this.addToggle(container, "Blips", this.settings.blips, (v) => {
+      this.settings.blips = v;
+      this.onToggle("blips", v);
+    });
+    this.addToggle(container, "Explosions", this.settings.explosions, (v) => {
+      this.settings.explosions = v;
+      this.onToggle("explosions", v);
+    });
+    this.addToggle(container, "Shake", this.settings.shake, (v) => {
+      this.settings.shake = v;
+      this.onToggle("shake", v);
+    });
+    this.addToggle(container, "Sound", this.settings.sound, (v) => {
+      this.settings.sound = v;
+      this.onToggle("sound", v);
+    });
+    this.addToggle(container, "Reduced Effects", this.settings.reducedEffects, (v) => {
+      this.settings.reducedEffects = v;
+      this.onToggle("reducedEffects", v);
+    });
+
+    container.createEl("hr");
+
+    // Reset button
+    const resetBtn = container.createEl("button", { text: "Reset XP" });
+    resetBtn.addEventListener("click", () => {
+      this.onResetXp();
+      this.render();
+    });
+  }
+
+  private addToggle(
+    container: HTMLElement,
+    label: string,
+    value: boolean,
+    onChange: (value: boolean) => void
+  ): void {
+    const row = container.createDiv({ cls: "toggle-row" });
+    row.createSpan({ text: label });
+
+    const toggle = row.createEl("input", { type: "checkbox" });
+    toggle.checked = value;
+    toggle.addEventListener("change", () => {
+      onChange(toggle.checked);
+    });
+  }
+
+  refresh(): void {
+    this.render();
+  }
+
+  async onClose(): Promise<void> {
+    // Cleanup
+  }
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/ControlPanel.ts
+git commit -m "feat: add control panel sidebar view"
+```
+
+---
+
+### Task 10: Main Plugin Integration
+
+**Files:**
+- Create: `src/main.ts`
+
+**Interfaces:**
+- Consumes: All previous modules
+- Produces: Fully functional Obsidian plugin
+
+- [ ] **Step 1: Create `src/main.ts`**
+
+```typescript
+import { Plugin, addIcon } from "obsidian";
+import { Settings } from "./types";
+import { DEFAULT_SETTINGS, PLUGIN_ID, STATUS_BAR_CLASS, PANEL_VIEW_TYPE } from "./constants";
+import { XPService } from "./XPService";
+import { AudioService } from "./AudioService";
+import { RidiculousCodingSettingTab } from "./SettingsTab";
+import { RidiculousCodingPanel } from "./ControlPanel";
+import { Fireworks } from "./Fireworks";
+import { createRidiculousPlugin } from "./EffectManager";
+import { EditorView, ViewPlugin } from "@codemirror/view";
+
+export default class RidiculousCodingPlugin extends Plugin {
+  settings: Settings & { xp?: number; level?: number; xpNextAbs?: number; xpLevelStart?: number };
+  xpService!: XPService;
+  audioService!: AudioService;
+  fireworks!: Fireworks;
+  private statusBarItem: HTMLElement | null = null;
+  private panel: RidiculousCodingPanel | null = null;
+  private cmExtension: ViewPlugin<any> | null = null;
+  private currentEditorView: EditorView | null = null;
+
+  async onload() {
+    await this.loadSettings();
+
+    // Initialize services
+    this.xpService = new XPService(this, this.settings.baseXp);
+    this.audioService = new AudioService(this);
+    this.fireworks = new Fireworks();
+
+    // Configure audio
+    await this.audioService.configure();
+
+    // Register CodeMirror extension for the current editor
+    this.registerCodeMirrorPlugin();
+
+    // Register view (when editor changes, re-register)
+    this.registerEditorExtensionChange();
+
+    // Status bar
+    this.statusBarItem = this.addStatusBarItem();
+    this.statusBarItem.addClass(STATUS_BAR_CLASS);
+    this.statusBarItem.onclick = () => {
+      this.activatePanel();
+    };
+    this.updateStatusBar();
+
+    // Settings tab
+    this.addSettingTab(new RidiculousCodingSettingTab(this.app, this, this.xpService));
+
+    // Register panel view
+    this.registerView(PANEL_VIEW_TYPE, (leaf) => {
+      this.panel = new RidiculousCodingPanel(
+        leaf,
+        this.xpService,
+        this.settings,
+        (key, value) => {
+          (this.settings as any)[key] = value;
+          this.saveSettings();
+        },
+        () => {
+          this.xpService.reset();
+          this.updateStatusBar();
+        }
+      );
+      return this.panel;
+    });
+
+    // Commands
+    this.addCommand({
+      id: "show-panel",
+      name: "Show Ridiculous Coding Panel",
+      callback: () => this.activatePanel(),
+    });
+
+    this.addCommand({
+      id: "reset-xp",
+      name: "Reset XP",
+      callback: () => {
+        this.xpService.reset();
+        this.updateStatusBar();
+        if (this.panel) this.panel.refresh();
+      },
+    });
+  }
+
+  private registerCodeMirrorPlugin(): void {
+    this.cmExtension = createRidiculousPlugin(this.settings);
+
+    this.registerEditorExtension(this.cmExtension);
+  }
+
+  private registerEditorExtensionChange(): void {
+    this.registerEvent(
+      (this.app.vault as any).on("editor-change", () => {
+        // Editor changes are handled through the CM ViewPlugin
+        // This is a no-op for effect detection; effects are driven by
+        // the ViewPlugin's update() method
+      })
+    );
+  }
+
+  async activatePanel() {
+    const { workspace } = this.app;
+
+    let leaf = workspace.getLeavesOfType(PANEL_VIEW_TYPE)[0];
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false)!;
+      await leaf.setViewState({ type: PANEL_VIEW_TYPE, active: true });
+    }
+
+    workspace.revealLeaf(leaf);
+  }
+
+  updateStatusBar(): void {
+    if (!this.settings.enableStatusBar || !this.statusBarItem) return;
+
+    const prog = this.xpService.progress;
+    this.statusBarItem.setText(`RC Lv ${this.xpService.level} — ${prog.current}/${prog.max} XP`);
+    this.statusBarItem.setAttr("aria-label", `Ridiculous Coding - Level ${this.xpService.level}`);
+  }
+
+  clearAllDecorations(): void {
+    // Clear via the ViewPlugin if accessible
+    // The EffectManager handles this in its clearDecorations()
+  }
+
+  async loadSettings() {
+    const saved = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+    this.xpService.setBaseXp(this.settings.baseXp);
+    this.audioService.isEnabled = this.settings.sound;
+    this.updateStatusBar();
+    if (this.panel) this.panel.refresh();
+  }
+
+  onunload() {
+    this.audioService.dispose();
+    this.fireworks.dispose();
+    this.panel = null;
+  }
+}
+```
+
+- [ ] **Step 2: Create `versions.json`**
+
+```json
+{
+  "1.0.0": "0.15.0"
+}
+```
+
+- [ ] **Step 3: Verify build**
+
+```bash
+npm run build
+# Expected: esbuild bundles src/main.ts → main.js without errors
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/main.ts versions.json
+git commit -m "feat: integrate all modules into main plugin"
+```
+
+---
+
+### Task 11: Polish and README
+
+**Files:**
+- Modify: `README.md` (update with full documentation)
+- Create: `.gitignore`
+
+- [ ] **Step 1: Create `.gitignore`**
+
+```
+node_modules/
+main.js
+*.map
+.DS_Store
+```
+
+- [ ] **Step 2: Update `README.md`** with full usage documentation, settings reference, and credits
+
+- [ ] **Step 3: Final build verification**
+
+```bash
+npm run build
+# Verify main.js exists and is non-empty
+ls -la main.js
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add .gitignore README.md
+git commit -m "docs: add full README and gitignore"
+```
