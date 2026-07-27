@@ -1,13 +1,15 @@
+import { App } from "obsidian";
 import { SoundEvent } from "./types";
+import { PLUGIN_ID } from "./constants";
 
 export class AudioService {
   private audioContext: AudioContext | null = null;
   private buffers: Map<string, AudioBuffer> = new Map();
-  private plugin: any;
+  private app: App;
   isEnabled: boolean = true;
 
-  constructor(plugin: any) {
-    this.plugin = plugin;
+  constructor(app: App) {
+    this.app = app;
   }
 
   async configure(): Promise<void> {
@@ -22,10 +24,12 @@ export class AudioService {
     }
   }
 
-  private async loadSound(name: string, path: string): Promise<void> {
+  private async loadSound(name: string, relativePath: string): Promise<void> {
     if (!this.audioContext) return;
     try {
-      const response = await fetch(path);
+      const vaultPath = `.obsidian/plugins/${PLUGIN_ID}/${relativePath}`;
+      const resourceUrl = this.app.vault.adapter.getResourcePath(vaultPath);
+      const response = await fetch(resourceUrl);
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
       this.buffers.set(name, audioBuffer);

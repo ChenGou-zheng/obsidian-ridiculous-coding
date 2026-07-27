@@ -48,6 +48,7 @@ var RATE_LIMITS = {
   MAX_SHAKE_TOTAL_MS: 400,
   SHAKE_FRAME_MS: 50
 };
+var PLUGIN_ID = "obsidian-ridiculous-coding";
 var STATUS_BAR_CLASS = "ridiculous-coding-status-bar";
 var PANEL_VIEW_TYPE = "ridiculous-coding-panel";
 var FIREWORKS_CLASS = "ridiculous-coding-fireworks";
@@ -111,11 +112,11 @@ var XPService = class {
 
 // src/AudioService.ts
 var AudioService = class {
-  constructor(plugin) {
+  constructor(app) {
     this.audioContext = null;
     this.buffers = /* @__PURE__ */ new Map();
     this.isEnabled = true;
-    this.plugin = plugin;
+    this.app = app;
   }
   async configure() {
     try {
@@ -128,11 +129,13 @@ var AudioService = class {
       this.audioContext = null;
     }
   }
-  async loadSound(name, path) {
+  async loadSound(name, relativePath) {
     if (!this.audioContext)
       return;
     try {
-      const response = await fetch(path);
+      const vaultPath = `.obsidian/plugins/${PLUGIN_ID}/${relativePath}`;
+      const resourceUrl = this.app.vault.adapter.getResourcePath(vaultPath);
+      const response = await fetch(resourceUrl);
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
       this.buffers.set(name, audioBuffer);
@@ -721,7 +724,7 @@ var RidiculousCodingPlugin = class extends import_obsidian3.Plugin {
   async onload() {
     await this.loadSettings();
     this.xpService = new XPService(this, this.settings.baseXp);
-    this.audioService = new AudioService(this);
+    this.audioService = new AudioService(this.app);
     this.fireworks = new Fireworks();
     await this.audioService.configure();
     this.registerCodeMirrorPlugin();

@@ -21,7 +21,7 @@ export default class RidiculousCodingPlugin extends Plugin {
 
     // Initialize services
     this.xpService = new XPService(this, this.settings.baseXp);
-    this.audioService = new AudioService(this);
+    this.audioService = new AudioService(this.app);
     this.fireworks = new Fireworks();
 
     // Configure audio
