@@ -1,10 +1,10 @@
 {
 	"id": "ridiculous-coding",
 	"name": "Ridiculous Coding",
-	"minAppVersion": "1.13.3",
+	"minAppVersion": "1.8.0",
 	"description": "Blips, booms, fireworks, XP and levels — make your editing experience ridiculous!",
 	"author": "ChenGou-zheng",
 	"authorUrl": "https://github.com/ChenGou-zheng",
 	"isDesktopOnly": false,
-	"version":"1.0.9"
+	"version": "1.0.9"
 }
