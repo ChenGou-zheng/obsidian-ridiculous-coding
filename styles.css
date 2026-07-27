@@ -1,0 +1,63 @@
+.ridiculous-coding-status-bar {
+  cursor: pointer;
+}
+
+.ridiculous-coding-status-bar:hover {
+  opacity: 0.8;
+}
+
+/* Screen shake applied to the CodeMirror scroller */
+.ridiculous-coding-shake {
+  /* transform is applied inline via JS */
+}
+
+/* Control panel styles */
+.ridiculous-coding-panel {
+  padding: 12px;
+}
+
+.ridiculous-coding-panel h3 {
+  margin: 0 0 8px 0;
+  font-size: var(--font-ui-medium);
+}
+
+.ridiculous-coding-panel .progress-bar {
+  height: 8px;
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.ridiculous-coding-panel .progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--interactive-accent), #ff6b6b);
+  transition: width 0.3s ease;
+}
+
+.ridiculous-coding-panel .xp-text {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.ridiculous-coding-panel .toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.ridiculous-coding-panel button {
+  margin-top: 8px;
+}
+
+/* Fireworks overlay */
+.ridiculous-coding-fireworks {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--layer-popover);
+}
