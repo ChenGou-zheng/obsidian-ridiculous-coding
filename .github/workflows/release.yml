@@ -20,6 +20,16 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Verify version consistency
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "❌ Tag version ($TAG_VERSION) does not match manifest.json ($MANIFEST_VERSION)"
+            exit 1
+          fi
+          echo "✅ Tag v$TAG_VERSION matches manifest.json"
+
       - name: Install dependencies
         run: npm ci
 
