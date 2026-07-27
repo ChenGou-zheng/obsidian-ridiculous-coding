@@ -44,7 +44,7 @@ class FloatingLabelWidget extends WidgetType {
     const esc = (s: string) => s.replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
     const wrap = document.createElement("span");
-    wrap.style.cssText = "display: inline-block; width: 0; height: 0; overflow: visible; position: relative;";
+    wrap.className = "rc-widget-container";
 
     const fontData = getFontBase64();
     const fontFamily = fontData
@@ -70,10 +70,7 @@ class FloatingLabelWidget extends WidgetType {
 </svg>`;
 
     const img = document.createElement("img");
-    img.className = "rc-floating-label";
-    img.style.cssText = "position: absolute; left: 0; bottom: 0; width: auto; height: 1.2em; pointer-events: none; z-index: 1000;";
-    img.style.transform = "translateY(-1.1em) scale(1.6)";
-    img.style.transformOrigin = "left bottom";
+    img.className = "rc-label";
     img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
     this.imgEl = img;
@@ -125,11 +122,14 @@ class IconWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const span = document.createElement("span");
-    span.className = `rc-icon rc-icon-${this.iconName}`;
-    // Inline SVG content so it renders reliably in CM6
-    span.innerHTML = this.getSVG();
-    return span;
+    const wrap = document.createElement("span");
+    wrap.className = "rc-widget-container";
+
+    const icon = document.createElement("span");
+    icon.className = `rc-icon rc-icon-${this.iconName}`;
+    icon.innerHTML = this.getSVG();
+    wrap.appendChild(icon);
+    return wrap;
   }
 
   private getSVG(): string {

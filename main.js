@@ -440,35 +440,78 @@ var Fireworks = class {
 
 // src/EffectManager.ts
 var import_view = require("@codemirror/view");
+var fontBase64 = null;
+function getFontBase64() {
+  if (fontBase64)
+    return fontBase64;
+  return "";
+}
+function setFontBase64(b64) {
+  fontBase64 = b64;
+}
 var FloatingLabelWidget = class extends import_view.WidgetType {
-  constructor(text, color, fontSize = 18) {
+  constructor(text, color, fontSize, ttl) {
     super();
+    this.imgEl = null;
+    this.animTimer = null;
     this.text = text;
     this.color = color;
     this.fontSize = fontSize;
+    this.ttl = ttl;
+    this.createdAt = Date.now();
   }
-  toDOM(view) {
-    const span = document.createElement("span");
-    span.className = "rc-floating-label";
-    span.textContent = this.text;
-    span.setCssProps({
-      color: this.color,
-      fontSize: `${this.fontSize}px`
-    });
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (prefersReducedMotion) {
-      span.addClass("rc-floating-label-reduced");
-      window.setTimeout(() => span.remove(), 300);
-    } else {
-      window.requestAnimationFrame(() => {
-        span.setCssProps({
-          transform: "translateY(-2.5em) scale(1.0)",
-          opacity: "0"
-        });
-      });
-      window.setTimeout(() => span.remove(), 450);
+  toDOM(_view) {
+    const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+    const wrap = document.createElement("span");
+    wrap.className = "rc-widget-container";
+    const fontData = getFontBase64();
+    const fontFamily = fontData ? "'GravityBold8', 'Cascadia Code', 'Consolas', monospace" : "'Cascadia Code', 'Consolas', monospace";
+    const fontFace = fontData ? `@font-face { font-family: 'GravityBold8'; src: url(data:font/ttf;base64,${fontData}) format('truetype'); font-weight: normal; font-style: normal; }` : "";
+    const paddingX = 2;
+    const paddingY = 1;
+    const baseline = this.fontSize + paddingY;
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" height="${baseline + paddingY}">
+  <defs>
+    <style><![CDATA[
+      ${fontFace}
+      .t { font-family: ${fontFamily}; font-size: ${this.fontSize}px; fill: ${this.color}; }
+    ]]></style>
+  </defs>
+  <text class="t" x="${paddingX}" y="${baseline}">${esc(this.text)}</text>
+</svg>`;
+    const img = document.createElement("img");
+    img.className = "rc-label";
+    img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    this.imgEl = img;
+    wrap.appendChild(img);
+    this.startAnimation();
+    return wrap;
+  }
+  startAnimation() {
+    const floatEm = 0.7;
+    const scaleAdd = 0.6;
+    const tick = () => {
+      if (!this.imgEl)
+        return;
+      const now = Date.now();
+      const age = now - this.createdAt;
+      const progress = Math.max(0, Math.min(1, age / this.ttl));
+      const y = -(1.1 + floatEm * progress);
+      const s = 1.6 + scaleAdd * progress;
+      this.imgEl.style.transform = `translateY(${y}em) scale(${s})`;
+      if (progress < 1) {
+        this.animTimer = window.setTimeout(tick, 50);
+      }
+    };
+    this.animTimer = window.setTimeout(tick, 50);
+  }
+  destroy(_dom) {
+    if (this.animTimer !== null) {
+      window.clearTimeout(this.animTimer);
+      this.animTimer = null;
     }
-    return span;
+    this.imgEl = null;
   }
 };
 var IconWidget = class extends import_view.WidgetType {
@@ -477,10 +520,13 @@ var IconWidget = class extends import_view.WidgetType {
     this.iconName = iconName;
   }
   toDOM(view) {
-    const span = document.createElement("span");
-    span.className = `rc-icon rc-icon-${this.iconName}`;
-    span.innerHTML = this.getSVG();
-    return span;
+    const wrap = document.createElement("span");
+    wrap.className = "rc-widget-container";
+    const icon = document.createElement("span");
+    icon.className = `rc-icon rc-icon-${this.iconName}`;
+    icon.innerHTML = this.getSVG();
+    wrap.appendChild(icon);
+    return wrap;
   }
   getSVG() {
     switch (this.iconName) {
@@ -593,12 +639,13 @@ var RidiculousViewPlugin = class {
       const pos = Math.min(effect.pos, this.view.state.doc.length);
       if (pos >= this.view.state.doc.length)
         continue;
+      types.add(effect.type);
       const cursorPos = pos;
       switch (effect.type) {
         case "blip": {
           const color = RidiculousViewPlugin.randomGodotColor();
           if (effect.charLabel && this.settings.chars) {
-            const widget = new FloatingLabelWidget(effect.charLabel, color);
+            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, 400);
             newDecorations.push(
               import_view.Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
@@ -612,7 +659,7 @@ var RidiculousViewPlugin = class {
         case "boom": {
           if (effect.charLabel && this.settings.chars) {
             const color = RidiculousViewPlugin.randomGodotColor();
-            const widget = new FloatingLabelWidget(effect.charLabel, color);
+            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, 650);
             newDecorations.push(
               import_view.Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
@@ -631,7 +678,6 @@ var RidiculousViewPlugin = class {
           break;
         }
       }
-      types.add(effect.type);
     }
     const id = this.nextId++;
     const ttl = types.has("boom") ? 650 : types.has("blip") ? 400 : 350;
@@ -736,10 +782,12 @@ function createRidiculousPlugin(settings) {
 }
 
 // src/main.ts
-var RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
+var _RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
   constructor() {
     super(...arguments);
     this.statusBarItem = null;
+    this.pitchIncrease = 0;
+    this.pitchResetTimer = null;
   }
   getPanel() {
     var _a, _b;
@@ -751,6 +799,20 @@ var RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
     this.audioService = new AudioService(this.app);
     this.fireworks = new Fireworks();
     await this.audioService.configure();
+    try {
+      const fontPath = this.app.vault.adapter.getResourcePath(
+        `.obsidian/plugins/${PLUGIN_ID}/media/font/GravityBold8.ttf`
+      );
+      const resp = await (0, import_obsidian4.requestUrl)({ url: fontPath });
+      const bytes = new Uint8Array(resp.arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      setFontBase64(btoa(binary));
+    } catch (e) {
+      console.warn("Ridiculous Coding: Failed to load font, falling back to monospace");
+    }
     this.registerCodeMirrorPlugin();
     this.registerEditorEvents();
     this.statusBarItem = this.addStatusBarItem();
@@ -804,8 +866,18 @@ var RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
         const leveledUp = this.xpService.addXp(1);
         this.updateStatusBar();
         (_a = this.getPanel()) == null ? void 0 : _a.refresh();
+        this.pitchIncrease += 1;
+        if (this.pitchResetTimer)
+          window.clearTimeout(this.pitchResetTimer);
+        this.pitchResetTimer = window.setTimeout(
+          () => {
+            this.pitchIncrease = 0;
+          },
+          _RidiculousCodingPlugin.PITCH_RESET_MS
+        );
+        const pitch = 1 + Math.min(20, this.pitchIncrease) * 0.05;
         if (!this.settings.reducedEffects && this.settings.sound) {
-          this.audioService.play({ type: "blip", pitch: 1 });
+          this.audioService.play({ type: "blip", pitch });
         }
         if (leveledUp && !this.settings.reducedEffects && this.settings.fireworks) {
           this.fireworks.show();
@@ -854,3 +926,5 @@ var RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
     this.fireworks.dispose();
   }
 };
+var RidiculousCodingPlugin = _RidiculousCodingPlugin;
+RidiculousCodingPlugin.PITCH_RESET_MS = 180;

@@ -14,6 +14,9 @@ export default class RidiculousCodingPlugin extends Plugin {
   audioService!: AudioService;
   fireworks!: Fireworks;
   private statusBarItem: HTMLElement | null = null;
+  private pitchIncrease = 0;
+  private pitchResetTimer: number | null = null;
+  private static readonly PITCH_RESET_MS = 180;
 
   private getPanel(): RidiculousCodingPanel | null {
     return (this.app.workspace.getLeavesOfType(PANEL_VIEW_TYPE)[0]?.view as RidiculousCodingPanel) ?? null;
@@ -114,9 +117,18 @@ export default class RidiculousCodingPlugin extends Plugin {
         this.updateStatusBar();
         this.getPanel()?.refresh();
 
+        // Dynamic pitch — increases with rapid typing, resets after pause
+        this.pitchIncrease += 1.0;
+        if (this.pitchResetTimer) window.clearTimeout(this.pitchResetTimer);
+        this.pitchResetTimer = window.setTimeout(
+          () => { this.pitchIncrease = 0; },
+          RidiculousCodingPlugin.PITCH_RESET_MS
+        );
+        const pitch = 1.0 + Math.min(20, this.pitchIncrease) * 0.05;
+
         // Play audio only if effects are enabled
         if (!this.settings.reducedEffects && this.settings.sound) {
-          this.audioService.play({ type: "blip", pitch: 1 });
+          this.audioService.play({ type: "blip", pitch });
         }
 
         // Trigger fireworks on level-up (visual + audio)
