@@ -5,5 +5,6 @@
 	"description": "Blips, booms, fireworks, XP and levels — make your editing experience ridiculous!",
 	"author": "ChenGou-zheng",
 	"authorUrl": "https://github.com/ChenGou-zheng",
-	"isDesktopOnly": false
+	"isDesktopOnly": false,
+  "version": "1.0.6"
 }
