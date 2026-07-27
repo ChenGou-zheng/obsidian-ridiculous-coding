@@ -479,7 +479,20 @@ var IconWidget = class extends import_view.WidgetType {
   toDOM(view) {
     const span = document.createElement("span");
     span.className = `rc-icon rc-icon-${this.iconName}`;
+    span.innerHTML = this.getSVG();
     return span;
+  }
+  getSVG() {
+    switch (this.iconName) {
+      case "blip":
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="18" height="18"><circle cx="9" cy="9" r="6" fill="url(#blip-g)" opacity="0.9"/><defs><radialGradient id="blip-g"><stop offset="0%" stop-color="#ff0"/><stop offset="100%" stop-color="#f0f"/></radialGradient></defs></svg>`;
+      case "boom":
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><circle cx="16" cy="16" r="14" fill="#ff4400" opacity="0.8"/><circle cx="16" cy="16" r="14" fill="none" stroke="#ffaa00" stroke-width="3" opacity="0.6" transform="scale(0.8) translate(4,4)"/></svg>`;
+      case "newline":
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="14" height="14"><path d="M4 4v6h6" fill="none" stroke="#4fc3f7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 10L4 4" fill="none" stroke="#4fc3f7" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+      default:
+        return "";
+    }
   }
 };
 var RidiculousViewPlugin = class {

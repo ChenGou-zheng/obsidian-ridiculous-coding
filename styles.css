@@ -51,17 +51,25 @@
   margin-top: 8px;
 }
 
+/* ── GravityBold8 font for character labels ── */
+
+@font-face {
+  font-family: "GravityBold8";
+  src: url(media/font/GravityBold8.ttf) format("truetype");
+}
+
 /* ── EffectManager: Floating label decorations ── */
 
 .rc-floating-label {
-  position: absolute;
+  display: inline-block;
   pointer-events: none;
   z-index: 1000;
   font-weight: bold;
-  font-family: monospace;
+  font-family: "GravityBold8", "Cascadia Code", "Consolas", monospace;
   transform: translateY(-1.1em) scale(1.6);
   transform-origin: left bottom;
   transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+  line-height: 0;
 }
 
 .rc-floating-label.rc-floating-label-reduced {
@@ -74,25 +82,10 @@
 
 .rc-icon {
   display: inline-block;
-  width: 1em;
-  height: 1em;
-  background-size: contain;
-  background-repeat: no-repeat;
-  position: relative;
-  pointer-events: none;
+  width: 18px;
+  height: 18px;
   vertical-align: middle;
-}
-
-.rc-icon-blip {
-  background-image: url(media/blip.svg);
-}
-
-.rc-icon-boom {
-  background-image: url(media/boom.svg);
-}
-
-.rc-icon-newline {
-  background-image: url(media/newline.svg);
+  line-height: 0;
 }
 
 /* Fireworks overlay */
