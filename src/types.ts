@@ -1,5 +1,3 @@
-import { Plugin } from "obsidian";
-
 export interface Settings {
   blips: boolean;
   explosions: boolean;
