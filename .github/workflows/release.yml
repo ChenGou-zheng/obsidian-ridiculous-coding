@@ -54,7 +54,7 @@ jobs:
       - name: Create Release
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          gh release create "v$TAG_VERSION" \
+          gh release create "$TAG_VERSION" \
             "release/main.js" \
             "release/manifest.json" \
             "release/styles.css" \
