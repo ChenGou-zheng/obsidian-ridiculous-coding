@@ -21,13 +21,9 @@ export class Fireworks {
   show(): void {
     if (this.container) return; // Already showing
 
-    this.container = document.createElement("div");
-    this.container.className = FIREWORKS_CLASS;
-
-    this.canvas = document.createElement("canvas");
+    this.container = document.body.createEl("div", { cls: FIREWORKS_CLASS });
+    this.canvas = this.container.createEl("canvas");
     this.canvas.setCssProps({ width: "100%", height: "100%" });
-    this.container.appendChild(this.canvas);
-    document.body.appendChild(this.container);
 
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;

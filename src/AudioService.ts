@@ -79,7 +79,7 @@ export class AudioService {
 
   dispose(): void {
     if (this.audioContext) {
-      this.audioContext.close();
+      void this.audioContext.close();
       this.audioContext = null;
     }
     this.buffers.clear();

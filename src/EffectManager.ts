@@ -7,6 +7,7 @@ import {
   WidgetType,
 } from "@codemirror/view";
 
+import { Range } from "@codemirror/state";
 import { RATE_LIMITS } from "./constants";
 import { Settings } from "./types";
 
@@ -185,7 +186,7 @@ class RidiculousViewPlugin {
     this.animFrameId = null;
     if (this.pendingEffects.length === 0) return;
 
-    const decorations: any[] = [];
+    const decorations: Range<Decoration>[] = [];
 
     for (const effect of this.pendingEffects) {
       const pos = Math.min(effect.pos, this.view.state.doc.length);

@@ -1,6 +1,6 @@
 import { Plugin, Editor } from "obsidian";
 import { Settings } from "./types";
-import { DEFAULT_SETTINGS, PLUGIN_ID, STATUS_BAR_CLASS, PANEL_VIEW_TYPE } from "./constants";
+import { DEFAULT_SETTINGS, STATUS_BAR_CLASS, PANEL_VIEW_TYPE } from "./constants";
 import { XPService } from "./XPService";
 import { AudioService } from "./AudioService";
 import { RidiculousCodingSettingTab } from "./SettingsTab";
@@ -40,7 +40,7 @@ export default class RidiculousCodingPlugin extends Plugin {
     this.statusBarItem = this.addStatusBarItem();
     this.statusBarItem.addClass(STATUS_BAR_CLASS);
     this.statusBarItem.onclick = () => {
-      this.activatePanel();
+      void this.activatePanel();
     };
     this.updateStatusBar();
 
@@ -57,8 +57,8 @@ export default class RidiculousCodingPlugin extends Plugin {
         this.xpService,
         this.settings,
         (key, value) => {
-          (this.settings as any)[key] = value;
-          this.saveSettings();
+          (this.settings as Record<string, any>)[key] = value;
+          void this.saveSettings();
         },
         () => {
           this.xpService.reset();
@@ -139,7 +139,7 @@ export default class RidiculousCodingPlugin extends Plugin {
   }
 
   async loadSettings() {
-    const saved = await this.loadData();
+    const saved = await this.loadData() as Record<string, any>;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
   }
 

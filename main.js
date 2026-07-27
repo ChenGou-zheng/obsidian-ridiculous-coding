@@ -106,7 +106,7 @@ var XPService = class {
     data.level = this.level;
     data.xpNextAbs = this.xpNextAbs;
     data.xpLevelStart = this.xpLevelStart;
-    this.plugin.saveSettings();
+    void this.plugin.saveSettings();
   }
 };
 
@@ -178,7 +178,7 @@ var AudioService = class {
   }
   dispose() {
     if (this.audioContext) {
-      this.audioContext.close();
+      void this.audioContext.close();
       this.audioContext = null;
     }
     this.buffers.clear();
@@ -193,10 +193,12 @@ var RidiculousCodingSettingTab = class extends import_obsidian2.PluginSettingTab
     this.plugin = plugin;
     this.xpService = xpService;
   }
+  getSettingDefinitions() {
+    return [];
+  }
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("Ridiculous Coding").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Blip effects").setDesc("Show animations when typing characters").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.blips).onChange(async (value) => {
         this.plugin.settings.blips = value;
@@ -388,12 +390,9 @@ var Fireworks = class {
   show() {
     if (this.container)
       return;
-    this.container = document.createElement("div");
-    this.container.className = FIREWORKS_CLASS;
-    this.canvas = document.createElement("canvas");
+    this.container = document.body.createEl("div", { cls: FIREWORKS_CLASS });
+    this.canvas = this.container.createEl("canvas");
     this.canvas.setCssProps({ width: "100%", height: "100%" });
-    this.container.appendChild(this.canvas);
-    document.body.appendChild(this.container);
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
     this.ctx = this.canvas.getContext("2d");
@@ -727,7 +726,7 @@ var RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
     this.statusBarItem = this.addStatusBarItem();
     this.statusBarItem.addClass(STATUS_BAR_CLASS);
     this.statusBarItem.onclick = () => {
-      this.activatePanel();
+      void this.activatePanel();
     };
     this.updateStatusBar();
     this.addRibbonIcon("rocket", "Ridiculous Coding", () => this.activatePanel());
@@ -740,7 +739,7 @@ var RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
         this.settings,
         (key, value) => {
           this.settings[key] = value;
-          this.saveSettings();
+          void this.saveSettings();
         },
         () => {
           this.xpService.reset();

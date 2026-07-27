@@ -1,4 +1,4 @@
-import { Settings, XPData, IPlugin } from "./types";
+import { IPlugin } from "./types";
 
 export class XPService {
   private plugin: IPlugin;
@@ -60,6 +60,6 @@ export class XPService {
     data.level = this.level;
     data.xpNextAbs = this.xpNextAbs;
     data.xpLevelStart = this.xpLevelStart;
-    this.plugin.saveSettings();
+    void this.plugin.saveSettings();
   }
 }

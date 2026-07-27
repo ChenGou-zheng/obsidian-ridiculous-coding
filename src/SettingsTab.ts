@@ -13,11 +13,13 @@ export class RidiculousCodingSettingTab extends PluginSettingTab {
     this.xpService = xpService;
   }
 
+  getSettingDefinitions(): any[] {
+    return [];
+  }
+
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-
-    new Setting(containerEl).setName("Ridiculous Coding").setHeading();
 
     new Setting(containerEl)
       .setName("Blip effects")
