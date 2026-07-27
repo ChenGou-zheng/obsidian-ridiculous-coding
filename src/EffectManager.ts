@@ -107,6 +107,16 @@ class RidiculousViewPlugin {
   private shakeTimerId: number | null = null;
   private shakeDOM: HTMLElement | null = null;
 
+  // Lifetime-tracked overlay system: each batch keeps its own decorations
+  private activeItems: Array<{
+    id: number;
+    type: string;
+    decorations: Range<Decoration>[];
+    ttl: number;
+    createdAt: number;
+  }> = [];
+  private nextId = 0;
+
   // Color generation matching the Godot original
   private static randomGodotColor(): string {
     const r = Math.min(255, Math.round(Math.random() * 510));
@@ -198,11 +208,21 @@ class RidiculousViewPlugin {
     this.animFrameId = window.requestAnimationFrame(() => this.applyEffects());
   }
 
+  private rebuildDecorations(): void {
+    const all: Range<Decoration>[] = [];
+    for (const item of this.activeItems) {
+      all.push(...item.decorations);
+    }
+    this.decorations = Decoration.set(all);
+    this.view.dispatch();
+  }
+
   private applyEffects(): void {
     this.animFrameId = null;
     if (this.pendingEffects.length === 0) return;
 
-    const decorations: Range<Decoration>[] = [];
+    const newDecorations: Range<Decoration>[] = [];
+    const types = new Set<string>();
 
     for (const effect of this.pendingEffects) {
       const pos = Math.min(effect.pos, this.view.state.doc.length);
@@ -215,12 +235,12 @@ class RidiculousViewPlugin {
           const color = RidiculousViewPlugin.randomGodotColor();
           if (effect.charLabel && this.settings.chars) {
             const widget = new FloatingLabelWidget(effect.charLabel, color);
-            decorations.push(
+            newDecorations.push(
               Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
           const iconWidget = new IconWidget("blip");
-          decorations.push(
+          newDecorations.push(
             Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
           break;
@@ -229,34 +249,40 @@ class RidiculousViewPlugin {
           if (effect.charLabel && this.settings.chars) {
             const color = RidiculousViewPlugin.randomGodotColor();
             const widget = new FloatingLabelWidget(effect.charLabel, color);
-            decorations.push(
+            newDecorations.push(
               Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
           const iconWidget = new IconWidget("boom");
-          decorations.push(
+          newDecorations.push(
             Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
           break;
         }
         case "newline": {
           const iconWidget = new IconWidget("newline");
-          decorations.push(
+          newDecorations.push(
             Decoration.widget({ widget: iconWidget, side: -1 }).range(pos, pos)
           );
           break;
         }
       }
+
+      types.add(effect.type);
     }
 
-    this.decorations = Decoration.set(decorations);
+    const id = this.nextId++;
+    const ttl = types.has("boom") ? 650 : types.has("blip") ? 400 : 350;
+
+    this.activeItems.push({ id, type: [...types][0], decorations: newDecorations, ttl, createdAt: Date.now() });
+    this.rebuildDecorations();
+
     this.pendingEffects = [];
 
-    // Clear decorations after a short delay
     window.setTimeout(() => {
-      this.decorations = Decoration.none;
-      this.view.dispatch();
-    }, 400);
+      this.activeItems = this.activeItems.filter(item => item.id !== id);
+      this.rebuildDecorations();
+    }, ttl);
   }
 
   // ── Screen Shake ──
@@ -317,6 +343,7 @@ class RidiculousViewPlugin {
   }
 
   clearDecorations(): void {
+    this.activeItems = [];
     this.decorations = Decoration.none;
     this.pendingEffects = [];
     if (this.animFrameId !== null) {

@@ -505,6 +505,9 @@ var RidiculousViewPlugin = class {
     this.shakeEndAt = 0;
     this.shakeTimerId = null;
     this.shakeDOM = null;
+    // Lifetime-tracked overlay system: each batch keeps its own decorations
+    this.activeItems = [];
+    this.nextId = 0;
     this.view = view;
     this.settings = settings;
   }
@@ -572,11 +575,20 @@ var RidiculousViewPlugin = class {
       return;
     this.animFrameId = window.requestAnimationFrame(() => this.applyEffects());
   }
+  rebuildDecorations() {
+    const all = [];
+    for (const item of this.activeItems) {
+      all.push(...item.decorations);
+    }
+    this.decorations = import_view.Decoration.set(all);
+    this.view.dispatch();
+  }
   applyEffects() {
     this.animFrameId = null;
     if (this.pendingEffects.length === 0)
       return;
-    const decorations = [];
+    const newDecorations = [];
+    const types = /* @__PURE__ */ new Set();
     for (const effect of this.pendingEffects) {
       const pos = Math.min(effect.pos, this.view.state.doc.length);
       if (pos >= this.view.state.doc.length)
@@ -587,12 +599,12 @@ var RidiculousViewPlugin = class {
           const color = RidiculousViewPlugin.randomGodotColor();
           if (effect.charLabel && this.settings.chars) {
             const widget = new FloatingLabelWidget(effect.charLabel, color);
-            decorations.push(
+            newDecorations.push(
               import_view.Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
           const iconWidget = new IconWidget("blip");
-          decorations.push(
+          newDecorations.push(
             import_view.Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
           break;
@@ -601,31 +613,35 @@ var RidiculousViewPlugin = class {
           if (effect.charLabel && this.settings.chars) {
             const color = RidiculousViewPlugin.randomGodotColor();
             const widget = new FloatingLabelWidget(effect.charLabel, color);
-            decorations.push(
+            newDecorations.push(
               import_view.Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
           const iconWidget = new IconWidget("boom");
-          decorations.push(
+          newDecorations.push(
             import_view.Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
           break;
         }
         case "newline": {
           const iconWidget = new IconWidget("newline");
-          decorations.push(
+          newDecorations.push(
             import_view.Decoration.widget({ widget: iconWidget, side: -1 }).range(pos, pos)
           );
           break;
         }
       }
+      types.add(effect.type);
     }
-    this.decorations = import_view.Decoration.set(decorations);
+    const id = this.nextId++;
+    const ttl = types.has("boom") ? 650 : types.has("blip") ? 400 : 350;
+    this.activeItems.push({ id, type: [...types][0], decorations: newDecorations, ttl, createdAt: Date.now() });
+    this.rebuildDecorations();
     this.pendingEffects = [];
     window.setTimeout(() => {
-      this.decorations = import_view.Decoration.none;
-      this.view.dispatch();
-    }, 400);
+      this.activeItems = this.activeItems.filter((item) => item.id !== id);
+      this.rebuildDecorations();
+    }, ttl);
   }
   // ── Screen Shake ──
   triggerShake(extendMs) {
@@ -678,6 +694,7 @@ var RidiculousViewPlugin = class {
     return ch;
   }
   clearDecorations() {
+    this.activeItems = [];
     this.decorations = import_view.Decoration.none;
     this.pendingEffects = [];
     if (this.animFrameId !== null) {
