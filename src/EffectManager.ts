@@ -115,6 +115,7 @@ class FloatingLabelWidget extends WidgetType {
 
 class IconWidget extends WidgetType {
   private iconName: string;
+  private domEl: HTMLElement | null = null;
 
   constructor(iconName: string) {
     super();
@@ -129,7 +130,19 @@ class IconWidget extends WidgetType {
     icon.className = `rc-icon rc-icon-${this.iconName}`;
     icon.innerHTML = this.getSVG();
     wrap.appendChild(icon);
+
+    this.domEl = wrap;
     return wrap;
+  }
+
+  setTransform(y: number, s: number): void {
+    if (this.domEl) {
+      this.domEl.style.transform = `translateY(${y}em) scale(${s})`;
+    }
+  }
+
+  destroy(_dom: HTMLElement): void {
+    this.domEl = null;
   }
 
   private getSVG(): string {
@@ -172,10 +185,23 @@ class RidiculousViewPlugin {
     id: number;
     type: string;
     decorations: Range<Decoration>[];
+    iconWidget: IconWidget | null;
     ttl: number;
     createdAt: number;
   }> = [];
   private nextId = 0;
+
+  // ── Combo trail animation constants ──
+
+  private static readonly TRAIL_BLIP_MS = 400;
+  private static readonly TRAIL_BOOM_MS = 650;
+  private static readonly TRAIL_NEWLINE_MS = 350;
+  private static readonly TRAIL_FRAME_MS = 50;
+  private static readonly TRAIL_FLOAT_EM = 0.7;
+  private static readonly TRAIL_SCALE_ADD = 0.6;
+  private static readonly MAX_TRAIL = 5;
+
+  private animTimers: Map<string, number> = new Map();
 
   // Color generation matching the Godot original
   private static randomGodotColor(): string {
@@ -281,67 +307,144 @@ class RidiculousViewPlugin {
     this.animFrameId = null;
     if (this.pendingEffects.length === 0) return;
 
-    const newDecorations: Range<Decoration>[] = [];
-    const types = new Set<string>();
+    const typesTriggered = new Set<string>();
 
     for (const effect of this.pendingEffects) {
       const pos = Math.min(effect.pos, this.view.state.doc.length);
       if (pos >= this.view.state.doc.length) continue;
-      types.add(effect.type);
 
+      typesTriggered.add(effect.type);
       const cursorPos = pos;
+      const itemDecorations: Range<Decoration>[] = [];
+      let iconWidget: IconWidget | null = null;
+      let ttl: number;
 
       switch (effect.type) {
         case "blip": {
+          ttl = RidiculousViewPlugin.TRAIL_BLIP_MS;
           const color = RidiculousViewPlugin.randomGodotColor();
           if (effect.charLabel && this.settings.chars) {
-            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, 400);
-            newDecorations.push(
+            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, ttl);
+            itemDecorations.push(
               Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
-          const iconWidget = new IconWidget("blip");
-          newDecorations.push(
+          iconWidget = new IconWidget("blip");
+          itemDecorations.push(
             Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
           break;
         }
         case "boom": {
+          ttl = RidiculousViewPlugin.TRAIL_BOOM_MS;
           if (effect.charLabel && this.settings.chars) {
             const color = RidiculousViewPlugin.randomGodotColor();
-            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, 650);
-            newDecorations.push(
+            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, ttl);
+            itemDecorations.push(
               Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
-          const iconWidget = new IconWidget("boom");
-          newDecorations.push(
+          iconWidget = new IconWidget("boom");
+          itemDecorations.push(
             Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
           break;
         }
         case "newline": {
-          const iconWidget = new IconWidget("newline");
-          newDecorations.push(
+          ttl = RidiculousViewPlugin.TRAIL_NEWLINE_MS;
+          iconWidget = new IconWidget("newline");
+          itemDecorations.push(
             Decoration.widget({ widget: iconWidget, side: -1 }).range(pos, pos)
           );
           break;
         }
       }
+
+      const id = this.nextId++;
+      this.activeItems.push({
+        id,
+        type: effect.type,
+        decorations: itemDecorations,
+        iconWidget,
+        ttl,
+        createdAt: Date.now(),
+      });
     }
 
-    const id = this.nextId++;
-    const ttl = types.has("boom") ? 650 : types.has("blip") ? 400 : 350;
+    // Enforce MAX_TRAIL per type
+    for (const type of typesTriggered) {
+      const typeItems = this.activeItems.filter(item => item.type === type);
+      if (typeItems.length > RidiculousViewPlugin.MAX_TRAIL) {
+        const excess = typeItems.length - RidiculousViewPlugin.MAX_TRAIL;
+        const toRemove = typeItems.slice(0, excess);
+        this.activeItems = this.activeItems.filter(item => {
+          if (item.type !== type) return true;
+          return !toRemove.some(r => r.id === item.id);
+        });
+      }
+    }
 
-    this.activeItems.push({ id, type: [...types][0], decorations: newDecorations, ttl, createdAt: Date.now() });
     this.rebuildDecorations();
-
     this.pendingEffects = [];
 
-    window.setTimeout(() => {
-      this.activeItems = this.activeItems.filter(item => item.id !== id);
-      this.rebuildDecorations();
-    }, ttl);
+    // Start/continue per-type animation loops
+    for (const type of typesTriggered) {
+      this.ensureAnimating(type);
+    }
+  }
+
+  // ── Per-type continuous frame animation loop ──
+
+  private ensureAnimating(type: string): void {
+    if (this.animTimers.has(type)) return;
+
+    const tick = () => {
+      const items = this.activeItems.filter(item => item.type === type);
+
+      if (items.length === 0) {
+        const timer = this.animTimers.get(type);
+        if (timer) {
+          window.clearTimeout(timer);
+          this.animTimers.delete(type);
+        }
+        return;
+      }
+
+      const now = Date.now();
+      const floatEm = RidiculousViewPlugin.TRAIL_FLOAT_EM;
+      const scaleAdd = RidiculousViewPlugin.TRAIL_SCALE_ADD;
+      const aliveIds = new Set<number>();
+
+      for (const item of items) {
+        const age = now - item.createdAt;
+        const progress = Math.max(0, Math.min(1, age / item.ttl));
+
+        if (progress >= 1) continue; // expired — remove below
+
+        aliveIds.add(item.id);
+
+        const y = -(1.1 + floatEm * progress);
+        const s = 1.6 + scaleAdd * progress;
+
+        // Update IconWidget transform (FloatingLabelWidget handles its own)
+        if (item.iconWidget) {
+          item.iconWidget.setTransform(y, s);
+        }
+      }
+
+      // Remove expired items
+      if (aliveIds.size !== items.length) {
+        this.activeItems = this.activeItems.filter(item => {
+          if (item.type !== type) return true;
+          return aliveIds.has(item.id);
+        });
+        this.rebuildDecorations();
+      }
+
+      this.animTimers.set(type, window.setTimeout(tick, RidiculousViewPlugin.TRAIL_FRAME_MS));
+    };
+
+    this.animTimers.set(type, window.setTimeout(tick, RidiculousViewPlugin.TRAIL_FRAME_MS));
   }
 
   // ── Screen Shake ──
@@ -402,6 +505,10 @@ class RidiculousViewPlugin {
   }
 
   clearDecorations(): void {
+    for (const [, timer] of this.animTimers) {
+      window.clearTimeout(timer);
+    }
+    this.animTimers.clear();
     this.activeItems = [];
     this.decorations = Decoration.none;
     this.pendingEffects = [];
