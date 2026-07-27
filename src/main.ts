@@ -1,12 +1,12 @@
-import { Plugin, Editor } from "obsidian";
+import { Plugin, Editor, requestUrl } from "obsidian";
 import { Settings } from "./types";
-import { DEFAULT_SETTINGS, STATUS_BAR_CLASS, PANEL_VIEW_TYPE } from "./constants";
+import { DEFAULT_SETTINGS, STATUS_BAR_CLASS, PANEL_VIEW_TYPE, PLUGIN_ID } from "./constants";
 import { XPService } from "./XPService";
 import { AudioService } from "./AudioService";
 import { RidiculousCodingSettingTab } from "./SettingsTab";
 import { RidiculousCodingPanel } from "./ControlPanel";
 import { Fireworks } from "./Fireworks";
-import { createRidiculousPlugin, clearActiveDecorations } from "./EffectManager";
+import { createRidiculousPlugin, clearActiveDecorations, setFontBase64 } from "./EffectManager";
 
 export default class RidiculousCodingPlugin extends Plugin {
   settings: Settings & { xp?: number; level?: number; xpNextAbs?: number; xpLevelStart?: number };
@@ -29,6 +29,22 @@ export default class RidiculousCodingPlugin extends Plugin {
 
     // Configure audio
     await this.audioService.configure();
+
+    // Load GravityBold8 font for blip text SVG rendering
+    try {
+      const fontPath = this.app.vault.adapter.getResourcePath(
+        `.obsidian/plugins/${PLUGIN_ID}/media/font/GravityBold8.ttf`
+      );
+      const resp = await requestUrl({ url: fontPath });
+      const bytes = new Uint8Array(resp.arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      setFontBase64(btoa(binary));
+    } catch {
+      console.warn("Ridiculous Coding: Failed to load font, falling back to monospace");
+    }
 
     // Register CodeMirror extension for decorations
     this.registerCodeMirrorPlugin();

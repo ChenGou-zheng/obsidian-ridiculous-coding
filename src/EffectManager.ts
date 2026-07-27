@@ -11,46 +11,106 @@ import { Range } from "@codemirror/state";
 import { RATE_LIMITS } from "./constants";
 import { Settings } from "./types";
 
+// ── Font base64 (lazy-loaded by main.ts) ──
+
+let fontBase64: string | null = null;
+function getFontBase64(): string {
+  if (fontBase64) return fontBase64;
+  return "";
+}
+export function setFontBase64(b64: string) { fontBase64 = b64; }
+
 // ── Widget: Floating char label (blip/boom text) ──
 
 class FloatingLabelWidget extends WidgetType {
   private text: string;
   private color: string;
   private fontSize: number;
+  private ttl: number;
+  private createdAt: number;
+  private imgEl: HTMLImageElement | null = null;
+  private animTimer: number | null = null;
 
-  constructor(text: string, color: string, fontSize: number = 18) {
+  constructor(text: string, color: string, fontSize: number, ttl: number) {
     super();
     this.text = text;
     this.color = color;
     this.fontSize = fontSize;
+    this.ttl = ttl;
+    this.createdAt = Date.now();
   }
 
-  toDOM(view: EditorView): HTMLElement {
-    const span = document.createElement("span");
-    span.className = "rc-floating-label";
-    span.textContent = this.text;
-    span.setCssProps({
-      color: this.color,
-      fontSize: `${this.fontSize}px`,
-    });
+  toDOM(_view: EditorView): HTMLElement {
+    const esc = (s: string) => s.replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+    const wrap = document.createElement("span");
+    wrap.style.cssText = "display: inline-block; width: 0; height: 0; overflow: visible; position: relative;";
 
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (prefersReducedMotion) {
-      span.addClass("rc-floating-label-reduced");
-      window.setTimeout(() => span.remove(), 300);
-    } else {
-      // Trigger float animation on next frame
-      window.requestAnimationFrame(() => {
-        span.setCssProps({
-          transform: "translateY(-2.5em) scale(1.0)",
-          opacity: "0",
-        });
-      });
-      // Remove from DOM after animation
-      window.setTimeout(() => span.remove(), 450);
+    const fontData = getFontBase64();
+    const fontFamily = fontData
+      ? "'GravityBold8', 'Cascadia Code', 'Consolas', monospace"
+      : "'Cascadia Code', 'Consolas', monospace";
+    const fontFace = fontData
+      ? `@font-face { font-family: 'GravityBold8'; src: url(data:font/ttf;base64,${fontData}) format('truetype'); font-weight: normal; font-style: normal; }`
+      : "";
+
+    const paddingX = 2;
+    const paddingY = 1;
+    const baseline = this.fontSize + paddingY;
+
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" height="${baseline + paddingY}">
+  <defs>
+    <style><![CDATA[
+      ${fontFace}
+      .t { font-family: ${fontFamily}; font-size: ${this.fontSize}px; fill: ${this.color}; }
+    ]]></style>
+  </defs>
+  <text class="t" x="${paddingX}" y="${baseline}">${esc(this.text)}</text>
+</svg>`;
+
+    const img = document.createElement("img");
+    img.className = "rc-floating-label";
+    img.style.cssText = "position: absolute; left: 0; bottom: 0; width: auto; height: 1.2em; pointer-events: none; z-index: 1000;";
+    img.style.transform = "translateY(-1.1em) scale(1.6)";
+    img.style.transformOrigin = "left bottom";
+    img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+
+    this.imgEl = img;
+    wrap.appendChild(img);
+
+    this.startAnimation();
+
+    return wrap;
+  }
+
+  private startAnimation(): void {
+    const floatEm = 0.7;
+    const scaleAdd = 0.6;
+
+    const tick = () => {
+      if (!this.imgEl) return;
+      const now = Date.now();
+      const age = now - this.createdAt;
+      const progress = Math.max(0, Math.min(1, age / this.ttl));
+      const y = -(1.1 + floatEm * progress);
+      const s = 1.6 + scaleAdd * progress;
+      this.imgEl.style.transform = `translateY(${y}em) scale(${s})`;
+
+      if (progress < 1) {
+        this.animTimer = window.setTimeout(tick, 50);
+      }
+    };
+
+    this.animTimer = window.setTimeout(tick, 50);
+  }
+
+  destroy(_dom: HTMLElement): void {
+    if (this.animTimer !== null) {
+      window.clearTimeout(this.animTimer);
+      this.animTimer = null;
     }
-
-    return span;
+    this.imgEl = null;
   }
 }
 
@@ -227,6 +287,7 @@ class RidiculousViewPlugin {
     for (const effect of this.pendingEffects) {
       const pos = Math.min(effect.pos, this.view.state.doc.length);
       if (pos >= this.view.state.doc.length) continue;
+      types.add(effect.type);
 
       const cursorPos = pos;
 
@@ -234,7 +295,7 @@ class RidiculousViewPlugin {
         case "blip": {
           const color = RidiculousViewPlugin.randomGodotColor();
           if (effect.charLabel && this.settings.chars) {
-            const widget = new FloatingLabelWidget(effect.charLabel, color);
+            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, 400);
             newDecorations.push(
               Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
@@ -248,7 +309,7 @@ class RidiculousViewPlugin {
         case "boom": {
           if (effect.charLabel && this.settings.chars) {
             const color = RidiculousViewPlugin.randomGodotColor();
-            const widget = new FloatingLabelWidget(effect.charLabel, color);
+            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, 650);
             newDecorations.push(
               Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
@@ -267,8 +328,6 @@ class RidiculousViewPlugin {
           break;
         }
       }
-
-      types.add(effect.type);
     }
 
     const id = this.nextId++;
