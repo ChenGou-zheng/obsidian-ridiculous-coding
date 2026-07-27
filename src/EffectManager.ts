@@ -35,16 +35,25 @@ class FloatingLabelWidget extends WidgetType {
     span.style.position = "absolute";
     span.style.pointerEvents = "none";
     span.style.zIndex = "1000";
-    span.style.transform = "translateY(-1.1em) scale(1.6)";
-    span.style.transformOrigin = "left bottom";
-    span.style.transition = "transform 0.4s ease-out, opacity 0.4s ease-out";
-    // Trigger float animation on next frame
-    requestAnimationFrame(() => {
-      span.style.transform = "translateY(-2.5em) scale(1.0)";
-      span.style.opacity = "0";
-    });
-    // Remove from DOM after animation
-    setTimeout(() => span.remove(), 450);
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) {
+      // Static display — no animation
+      span.style.opacity = "0.8";
+      setTimeout(() => span.remove(), 300);
+    } else {
+      span.style.transform = "translateY(-1.1em) scale(1.6)";
+      span.style.transformOrigin = "left bottom";
+      span.style.transition = "transform 0.4s ease-out, opacity 0.4s ease-out";
+      // Trigger float animation on next frame
+      requestAnimationFrame(() => {
+        span.style.transform = "translateY(-2.5em) scale(1.0)";
+        span.style.opacity = "0";
+      });
+      // Remove from DOM after animation
+      setTimeout(() => span.remove(), 450);
+    }
+
     return span;
   }
 }
@@ -122,16 +131,27 @@ class RidiculousViewPlugin {
     }
   }
 
+  private pendingCount(type: PendingEffect["type"]): number {
+    return this.pendingEffects.filter((e) => e.type === type).length;
+  }
+
   private handleInsert(pos: number, text: string): void {
     const now = Date.now();
     if (now - this.lastBlipTime < RATE_LIMITS.BLIP_MS) return;
     this.lastBlipTime = now;
 
-    if (text.includes("\n") && this.settings.blips) {
+    if (
+      text.includes("\n") &&
+      this.settings.blips &&
+      this.pendingCount("newline") < RATE_LIMITS.MAX_DECORATIONS_PER_TYPE
+    ) {
       this.pendingEffects.push({ type: "newline", pos });
     }
 
-    if (this.settings.blips) {
+    if (
+      this.settings.blips &&
+      this.pendingCount("blip") < RATE_LIMITS.MAX_DECORATIONS_PER_TYPE
+    ) {
       const charLabel = this.settings.chars ? this.sanitizeLabel(text[0]) : undefined;
       this.pendingEffects.push({ type: "blip", pos, charLabel });
     }
@@ -144,7 +164,10 @@ class RidiculousViewPlugin {
     if (now - this.lastBoomTime < RATE_LIMITS.BOOM_MS) return;
     this.lastBoomTime = now;
 
-    if (this.settings.explosions) {
+    if (
+      this.settings.explosions &&
+      this.pendingCount("boom") < RATE_LIMITS.MAX_DECORATIONS_PER_TYPE
+    ) {
       const charLabel = this.settings.chars ? "BACKSPACE" : undefined;
       this.pendingEffects.push({ type: "boom", pos, charLabel });
     }
