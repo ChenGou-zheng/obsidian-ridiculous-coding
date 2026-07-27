@@ -4,6 +4,7 @@ export interface Settings {
   chars: boolean;
   shake: boolean;
   shakeAmplitude: number;
+  shakeDecayMs: number;
   sound: boolean;
   fireworks: boolean;
   baseXp: number;

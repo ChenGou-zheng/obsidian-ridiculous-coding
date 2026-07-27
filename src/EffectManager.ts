@@ -352,7 +352,7 @@ class RidiculousViewPlugin {
     const now = Date.now();
     const maxEnd = now + RATE_LIMITS.MAX_SHAKE_TOTAL_MS;
     this.shakeEndAt = Math.min(
-      Math.max(this.shakeEndAt, now + extendMs),
+      Math.max(this.shakeEndAt, now + Math.max(extendMs, this.settings.shakeDecayMs)),
       maxEnd
     );
 

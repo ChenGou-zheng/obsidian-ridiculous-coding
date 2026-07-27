@@ -133,6 +133,15 @@ const maxExtend = Math.max(extendMs, decayMs);
 - 滑块可拖拽 20-2000
 - shake 效果受该值控制
 
+### 验证结果
+
+✅ **已实现。验证方法：**
+1. Settings → Ridiculous Coding 中出现 "Shake decay (ms)" 滑块，默认 120
+2. 滑块可拖拽 20-2000，步长 20
+3. shake 持续时间至少为该值（`Math.max(extendMs, shakeDecayMs)`）
+
+**修改文件：** `src/types.ts`, `src/constants.ts`, `src/SettingsTab.ts`, `src/EffectManager.ts:355`
+
 ---
 
 ## 任务 3: Combo Trail 动画持续帧刷新（修复装饰过早消失）

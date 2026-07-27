@@ -83,6 +83,19 @@ export class RidiculousCodingSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Shake decay (ms)")
+      .setDesc("Minimum shake duration in milliseconds (20-2000)")
+      .addSlider((slider) =>
+        slider
+          .setLimits(20, 2000, 20)
+          .setValue(this.plugin.settings.shakeDecayMs)
+          .onChange(async (value) => {
+            this.plugin.settings.shakeDecayMs = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Sound effects")
       .setDesc("Play sounds for blips, booms, and fireworks")
       .addToggle((toggle) =>

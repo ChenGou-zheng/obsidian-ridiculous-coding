@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chars: true,
   shake: true,
   shakeAmplitude: 6,
+  shakeDecayMs: 120,
   sound: true,
   fireworks: true,
   baseXp: 50,
