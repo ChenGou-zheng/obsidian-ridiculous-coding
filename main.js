@@ -265,7 +265,7 @@ var RidiculousCodingSettingTab = class extends import_obsidian2.PluginSettingTab
     );
     containerEl.createEl("hr");
     new import_obsidian2.Setting(containerEl).setName("Reset XP").setDesc("Reset your experience points and level back to 1").addButton(
-      (button) => button.setButtonText("Reset").setDestructive().onClick(() => {
+      (button) => button.setButtonText("Reset").setWarning().onClick(() => {
         this.xpService.reset();
         this.plugin.updateStatusBar();
         button.setButtonText("Reset \u2713");
@@ -794,7 +794,7 @@ var RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
       leaf = rightLeaf;
       await leaf.setViewState({ type: PANEL_VIEW_TYPE, active: true });
     }
-    workspace.revealLeaf(leaf);
+    workspace.setActiveLeaf(leaf);
   }
   updateStatusBar() {
     if (!this.settings.enableStatusBar || !this.statusBarItem)

@@ -156,7 +156,7 @@ export class RidiculousCodingSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText("Reset")
-          .setDestructive()
+          .setWarning()
           .onClick(() => {
             this.xpService.reset();
             this.plugin.updateStatusBar();

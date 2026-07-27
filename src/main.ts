@@ -123,7 +123,7 @@ export default class RidiculousCodingPlugin extends Plugin {
       await leaf.setViewState({ type: PANEL_VIEW_TYPE, active: true });
     }
 
-    workspace.revealLeaf(leaf);
+    workspace.setActiveLeaf(leaf);
   }
 
   updateStatusBar(): void {
