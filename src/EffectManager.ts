@@ -96,6 +96,9 @@ class RidiculousViewPlugin {
   private animFrameId: number | null = null;
   private lastBlipTime: number = 0;
   private lastBoomTime: number = 0;
+  private shakeEndAt: number = 0;
+  private shakeTimerId: number | null = null;
+  private shakeDOM: HTMLElement | null = null;
 
   // Color generation matching the Godot original
   private static randomGodotColor(): string {
@@ -157,6 +160,10 @@ class RidiculousViewPlugin {
     }
 
     this.scheduleAnimation();
+
+    if (this.settings.shake) {
+      this.triggerShake(text.includes("\n") ? 140 : 120);
+    }
   }
 
   private handleDelete(pos: number): void {
@@ -173,6 +180,10 @@ class RidiculousViewPlugin {
     }
 
     this.scheduleAnimation();
+
+    if (this.settings.shake) {
+      this.triggerShake(180);
+    }
   }
 
   private scheduleAnimation(): void {
@@ -241,6 +252,54 @@ class RidiculousViewPlugin {
     }, 400);
   }
 
+  // ── Screen Shake ──
+
+  triggerShake(extendMs: number): void {
+    if (!this.settings.shake) return;
+
+    const now = Date.now();
+    const maxEnd = now + RATE_LIMITS.MAX_SHAKE_TOTAL_MS;
+    this.shakeEndAt = Math.min(
+      Math.max(this.shakeEndAt, now + extendMs),
+      maxEnd
+    );
+
+    if (!this.shakeDOM) {
+      this.shakeDOM = this.view.scrollDOM;
+    }
+
+    if (this.shakeTimerId === null) {
+      this.startShakeLoop();
+    }
+  }
+
+  private startShakeLoop(): void {
+    const tick = () => {
+      const now = Date.now();
+      if (now >= this.shakeEndAt) {
+        this.shakeTimerId = null;
+        if (this.shakeDOM) {
+          this.shakeDOM.style.transform = "";
+        }
+        return;
+      }
+
+      const amplitude = this.settings.shakeAmplitude;
+      const angle = Math.random() * Math.PI * 2;
+      const dx = Math.round(Math.cos(angle) * amplitude);
+      const dy = Math.round(Math.sin(angle) * amplitude);
+
+      if (this.shakeDOM) {
+        this.shakeDOM.style.transform = `translate(${dx}px, ${dy}px)`;
+        this.shakeDOM.style.transition = "transform 0.03s linear";
+      }
+
+      this.shakeTimerId = window.setTimeout(tick, RATE_LIMITS.SHAKE_FRAME_MS);
+    };
+
+    tick();
+  }
+
   private sanitizeLabel(ch: string): string {
     if (ch === "\n") return "";
     if (ch === "\t") return "\u21B9";
@@ -254,6 +313,13 @@ class RidiculousViewPlugin {
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
+    }
+    if (this.shakeTimerId !== null) {
+      clearTimeout(this.shakeTimerId);
+      this.shakeTimerId = null;
+    }
+    if (this.shakeDOM) {
+      this.shakeDOM.style.transform = "";
     }
   }
 
