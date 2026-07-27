@@ -51,6 +51,39 @@
   margin-top: 8px;
 }
 
+/* ── EffectManager: Floating label decorations ── */
+
+.rc-floating-label {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* ── EffectManager: Icon decorations (blip, boom, newline) ── */
+
+.rc-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  position: relative;
+  pointer-events: none;
+  vertical-align: middle;
+}
+
+.rc-icon-blip {
+  background-image: url(media/blip.svg);
+}
+
+.rc-icon-boom {
+  background-image: url(media/boom.svg);
+}
+
+.rc-icon-newline {
+  background-image: url(media/newline.svg);
+}
+
 /* Fireworks overlay */
 .ridiculous-coding-fireworks {
   position: fixed;
