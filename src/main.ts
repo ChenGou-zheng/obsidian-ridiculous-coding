@@ -14,7 +14,10 @@ export default class RidiculousCodingPlugin extends Plugin {
   audioService!: AudioService;
   fireworks!: Fireworks;
   private statusBarItem: HTMLElement | null = null;
-  private panel: RidiculousCodingPanel | null = null;
+
+  private getPanel(): RidiculousCodingPanel | null {
+    return (this.app.workspace.getLeavesOfType(PANEL_VIEW_TYPE)[0]?.view as RidiculousCodingPanel) ?? null;
+  }
 
   async onload() {
     await this.loadSettings();
@@ -48,8 +51,8 @@ export default class RidiculousCodingPlugin extends Plugin {
     this.addSettingTab(new RidiculousCodingSettingTab(this.app, this, this.xpService));
 
     // Register panel view
-    this.registerView(PANEL_VIEW_TYPE, (leaf) => {
-      this.panel = new RidiculousCodingPanel(
+    this.registerView(PANEL_VIEW_TYPE, (leaf) =>
+      new RidiculousCodingPanel(
         leaf,
         this.xpService,
         this.settings,
@@ -61,14 +64,13 @@ export default class RidiculousCodingPlugin extends Plugin {
           this.xpService.reset();
           this.updateStatusBar();
         }
-      );
-      return this.panel;
-    });
+      )
+    );
 
     // Commands
     this.addCommand({
       id: "show-panel",
-      name: "Show Ridiculous Coding Panel",
+      name: "Show Panel",
       callback: () => this.activatePanel(),
     });
 
@@ -78,7 +80,7 @@ export default class RidiculousCodingPlugin extends Plugin {
       callback: () => {
         this.xpService.reset();
         this.updateStatusBar();
-        if (this.panel) this.panel.refresh();
+        this.getPanel()?.refresh();
       },
     });
   }
@@ -90,11 +92,11 @@ export default class RidiculousCodingPlugin extends Plugin {
 
   private registerEditorEvents(): void {
     this.registerEvent(
-      this.app.workspace.on("editor-change", (_editor: Editor, _info: any) => {
+      this.app.workspace.on("editor-change", (_editor: Editor, _info: unknown) => {
         // Always award XP (visual effects handled by CM ViewPlugin)
         const leveledUp = this.xpService.addXp(1);
         this.updateStatusBar();
-        if (this.panel) this.panel.refresh();
+        this.getPanel()?.refresh();
 
         // Play audio only if effects are enabled
         if (!this.settings.reducedEffects && this.settings.sound) {
@@ -146,15 +148,12 @@ export default class RidiculousCodingPlugin extends Plugin {
     this.xpService.setBaseXp(this.settings.baseXp);
     this.audioService.isEnabled = this.settings.sound;
     this.updateStatusBar();
-    if (this.panel) this.panel.refresh();
+    this.getPanel()?.refresh();
   }
 
   onunload() {
     this.clearAllDecorations();
     this.audioService.dispose();
     this.fireworks.dispose();
-    // Clean up panel
-    this.app.workspace.detachLeavesOfType(PANEL_VIEW_TYPE);
-    this.panel = null;
   }
 }

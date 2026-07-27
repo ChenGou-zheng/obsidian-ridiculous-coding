@@ -25,7 +25,7 @@ export const XP_FORMULA = {
   BASE_XP: 50,
 } as const;
 
-export const PLUGIN_ID = "obsidian-ridiculous-coding";
+export const PLUGIN_ID = "ridiculous-coding";
 export const STATUS_BAR_CLASS = "ridiculous-coding-status-bar";
 export const PANEL_VIEW_TYPE = "ridiculous-coding-panel";
 export const FIREWORKS_CLASS = "ridiculous-coding-fireworks";

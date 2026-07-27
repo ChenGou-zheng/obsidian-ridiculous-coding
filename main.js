@@ -26,7 +26,7 @@ __export(main_exports, {
   default: () => RidiculousCodingPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/constants.ts
 var DEFAULT_SETTINGS = {
@@ -48,7 +48,7 @@ var RATE_LIMITS = {
   MAX_SHAKE_TOTAL_MS: 400,
   SHAKE_FRAME_MS: 50
 };
-var PLUGIN_ID = "obsidian-ridiculous-coding";
+var PLUGIN_ID = "ridiculous-coding";
 var STATUS_BAR_CLASS = "ridiculous-coding-status-bar";
 var PANEL_VIEW_TYPE = "ridiculous-coding-panel";
 var FIREWORKS_CLASS = "ridiculous-coding-fireworks";
@@ -111,6 +111,7 @@ var XPService = class {
 };
 
 // src/AudioService.ts
+var import_obsidian = require("obsidian");
 var AudioService = class {
   constructor(app) {
     this.audioContext = null;
@@ -135,8 +136,8 @@ var AudioService = class {
     try {
       const vaultPath = `.obsidian/plugins/${PLUGIN_ID}/${relativePath}`;
       const resourceUrl = this.app.vault.adapter.getResourcePath(vaultPath);
-      const response = await fetch(resourceUrl);
-      const arrayBuffer = await response.arrayBuffer();
+      const response = await (0, import_obsidian.requestUrl)({ url: resourceUrl });
+      const arrayBuffer = response.arrayBuffer;
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
       this.buffers.set(name, audioBuffer);
     } catch (e) {
@@ -147,7 +148,7 @@ var AudioService = class {
     if (!this.isEnabled || !this.audioContext)
       return;
     if (this.audioContext.state === "suspended") {
-      this.audioContext.resume();
+      void this.audioContext.resume();
     }
     let bufferName;
     let playbackRate = 1;
@@ -185,8 +186,8 @@ var AudioService = class {
 };
 
 // src/SettingsTab.ts
-var import_obsidian = require("obsidian");
-var RidiculousCodingSettingTab = class extends import_obsidian.PluginSettingTab {
+var import_obsidian2 = require("obsidian");
+var RidiculousCodingSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin, xpService) {
     super(app, plugin);
     this.plugin = plugin;
@@ -195,88 +196,86 @@ var RidiculousCodingSettingTab = class extends import_obsidian.PluginSettingTab 
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Ridiculous Coding" });
-    new import_obsidian.Setting(containerEl).setName("Blip effects").setDesc("Show animations when typing characters").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Ridiculous Coding").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Blip effects").setDesc("Show animations when typing characters").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.blips).onChange(async (value) => {
         this.plugin.settings.blips = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Explosion effects").setDesc("Show boom effects when deleting").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Explosion effects").setDesc("Show boom effects when deleting").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.explosions).onChange(async (value) => {
         this.plugin.settings.explosions = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Character labels").setDesc("Overlay the typed character label with effects").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Character labels").setDesc("Overlay the typed character label with effects").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.chars).onChange(async (value) => {
         this.plugin.settings.chars = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Screen shake").setDesc("Enable screen shake effects").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Screen shake").setDesc("Enable screen shake effects").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.shake).onChange(async (value) => {
         this.plugin.settings.shake = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Shake amplitude").setDesc("Maximum shake displacement in pixels (0-32)").addSlider(
-      (slider) => slider.setLimits(0, 32, 1).setValue(this.plugin.settings.shakeAmplitude).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Shake amplitude").setDesc("Maximum shake displacement in pixels (0-32)").addSlider(
+      (slider) => slider.setLimits(0, 32, 1).setValue(this.plugin.settings.shakeAmplitude).onChange(async (value) => {
         this.plugin.settings.shakeAmplitude = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Sound effects").setDesc("Play sounds for blips, booms, and fireworks").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Sound effects").setDesc("Play sounds for blips, booms, and fireworks").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.sound).onChange(async (value) => {
         this.plugin.settings.sound = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Fireworks").setDesc("Celebrate level-ups with fireworks animation").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Fireworks").setDesc("Celebrate level-ups with fireworks animation").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.fireworks).onChange(async (value) => {
         this.plugin.settings.fireworks = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Base XP").setDesc("Base XP value used in level-up curve (10-200)").addSlider(
-      (slider) => slider.setLimits(10, 200, 5).setValue(this.plugin.settings.baseXp).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Base XP").setDesc("Base XP value used in level-up curve (10-200)").addSlider(
+      (slider) => slider.setLimits(10, 200, 5).setValue(this.plugin.settings.baseXp).onChange(async (value) => {
         this.plugin.settings.baseXp = value;
         this.xpService.setBaseXp(value);
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Status bar").setDesc("Show level and XP progress in the status bar").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Status bar").setDesc("Show level and XP progress in the status bar").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.enableStatusBar).onChange(async (value) => {
         this.plugin.settings.enableStatusBar = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Reduced effects mode").setDesc("Disable all visual effects and sounds for accessibility. XP system still works.").addToggle(
+    new import_obsidian2.Setting(containerEl).setName("Reduced effects mode").setDesc("Disable all visual effects and sounds for accessibility. XP system still works.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.reducedEffects).onChange(async (value) => {
-        var _a, _b;
         this.plugin.settings.reducedEffects = value;
         await this.plugin.saveSettings();
         if (value) {
-          (_b = (_a = this.plugin).clearAllDecorations) == null ? void 0 : _b.call(_a);
+          this.plugin.clearAllDecorations();
         }
       })
     );
     containerEl.createEl("hr");
-    new import_obsidian.Setting(containerEl).setName("Reset XP").setDesc("Reset your experience points and level back to 1").addButton(
-      (button) => button.setButtonText("Reset").setWarning().onClick(() => {
-        var _a, _b;
+    new import_obsidian2.Setting(containerEl).setName("Reset XP").setDesc("Reset your experience points and level back to 1").addButton(
+      (button) => button.setButtonText("Reset").setDestructive().onClick(() => {
         this.xpService.reset();
-        (_b = (_a = this.plugin).updateStatusBar) == null ? void 0 : _b.call(_a);
+        this.plugin.updateStatusBar();
         button.setButtonText("Reset \u2713");
-        setTimeout(() => button.setButtonText("Reset"), 2e3);
+        window.setTimeout(() => button.setButtonText("Reset"), 2e3);
       })
     );
   }
 };
 
 // src/ControlPanel.ts
-var import_obsidian2 = require("obsidian");
-var RidiculousCodingPanel = class extends import_obsidian2.ItemView {
+var import_obsidian3 = require("obsidian");
+var RidiculousCodingPanel = class extends import_obsidian3.ItemView {
   constructor(leaf, xpService, settings, onToggle, onResetXp) {
     super(leaf);
     this.xpService = xpService;
@@ -300,7 +299,7 @@ var RidiculousCodingPanel = class extends import_obsidian2.ItemView {
     const container = this.containerEl.children[1];
     container.empty();
     container.addClass("ridiculous-coding-panel");
-    const header = container.createEl("h3", { text: `\u{1F680} Level ${this.xpService.level}` });
+    container.createEl("h3", { text: `\u{1F680} Level ${this.xpService.level}` });
     const prog = this.xpService.progress;
     const progressContainer = container.createDiv({ cls: "progress-bar" });
     const progressFill = progressContainer.createDiv({ cls: "progress-bar-fill" });
@@ -380,7 +379,7 @@ var Fireworks = class {
         return true;
       });
       if (this.particles.length > 0) {
-        this.animId = requestAnimationFrame(this.animate);
+        this.animId = window.requestAnimationFrame(this.animate);
       } else {
         this.hide();
       }
@@ -392,8 +391,7 @@ var Fireworks = class {
     this.container = document.createElement("div");
     this.container.className = FIREWORKS_CLASS;
     this.canvas = document.createElement("canvas");
-    this.canvas.style.width = "100%";
-    this.canvas.style.height = "100%";
+    this.canvas.setCssProps({ width: "100%", height: "100%" });
     this.container.appendChild(this.canvas);
     document.body.appendChild(this.container);
     this.canvas.width = window.innerWidth;
@@ -403,7 +401,7 @@ var Fireworks = class {
     this.spawnBurst(window.innerWidth * 0.7, window.innerHeight * 0.2);
     this.spawnBurst(window.innerWidth * 0.5, window.innerHeight * 0.4);
     this.animate();
-    setTimeout(() => this.hide(), 3e3);
+    window.setTimeout(() => this.hide(), 3e3);
   }
   spawnBurst(x, y) {
     const colors = ["#ff6b6b", "#feca57", "#48dbfb", "#ff9ff3", "#54a0ff", "#5f27cd"];
@@ -425,7 +423,7 @@ var Fireworks = class {
   }
   hide() {
     if (this.animId !== null) {
-      cancelAnimationFrame(this.animId);
+      window.cancelAnimationFrame(this.animId);
       this.animId = null;
     }
     this.particles = [];
@@ -454,26 +452,22 @@ var FloatingLabelWidget = class extends import_view.WidgetType {
     const span = document.createElement("span");
     span.className = "rc-floating-label";
     span.textContent = this.text;
-    span.style.color = this.color;
-    span.style.fontSize = `${this.fontSize}px`;
-    span.style.fontWeight = "bold";
-    span.style.fontFamily = "monospace";
-    span.style.position = "absolute";
-    span.style.pointerEvents = "none";
-    span.style.zIndex = "1000";
+    span.setCssProps({
+      color: this.color,
+      fontSize: `${this.fontSize}px`
+    });
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReducedMotion) {
-      span.style.opacity = "0.8";
-      setTimeout(() => span.remove(), 300);
+      span.addClass("rc-floating-label-reduced");
+      window.setTimeout(() => span.remove(), 300);
     } else {
-      span.style.transform = "translateY(-1.1em) scale(1.6)";
-      span.style.transformOrigin = "left bottom";
-      span.style.transition = "transform 0.4s ease-out, opacity 0.4s ease-out";
-      requestAnimationFrame(() => {
-        span.style.transform = "translateY(-2.5em) scale(1.0)";
-        span.style.opacity = "0";
+      window.requestAnimationFrame(() => {
+        span.setCssProps({
+          transform: "translateY(-2.5em) scale(1.0)",
+          opacity: "0"
+        });
       });
-      setTimeout(() => span.remove(), 450);
+      window.setTimeout(() => span.remove(), 450);
     }
     return span;
   }
@@ -486,10 +480,6 @@ var IconWidget = class extends import_view.WidgetType {
   toDOM(view) {
     const span = document.createElement("span");
     span.className = `rc-icon rc-icon-${this.iconName}`;
-    span.style.display = "inline-block";
-    span.style.height = "1em";
-    span.style.position = "relative";
-    span.style.pointerEvents = "none";
     return span;
   }
 };
@@ -568,7 +558,7 @@ var RidiculousViewPlugin = class {
   scheduleAnimation() {
     if (this.animFrameId !== null)
       return;
-    this.animFrameId = requestAnimationFrame(() => this.applyEffects());
+    this.animFrameId = window.requestAnimationFrame(() => this.applyEffects());
   }
   applyEffects() {
     this.animFrameId = null;
@@ -620,7 +610,7 @@ var RidiculousViewPlugin = class {
     }
     this.decorations = import_view.Decoration.set(decorations);
     this.pendingEffects = [];
-    setTimeout(() => {
+    window.setTimeout(() => {
       this.decorations = import_view.Decoration.none;
       this.view.dispatch();
     }, 400);
@@ -648,7 +638,7 @@ var RidiculousViewPlugin = class {
       if (now >= this.shakeEndAt) {
         this.shakeTimerId = null;
         if (this.shakeDOM) {
-          this.shakeDOM.style.transform = "";
+          this.shakeDOM.setCssProps({ transform: "" });
         }
         return;
       }
@@ -657,8 +647,10 @@ var RidiculousViewPlugin = class {
       const dx = Math.round(Math.cos(angle) * amplitude);
       const dy = Math.round(Math.sin(angle) * amplitude);
       if (this.shakeDOM) {
-        this.shakeDOM.style.transform = `translate(${dx}px, ${dy}px)`;
-        this.shakeDOM.style.transition = "transform 0.03s linear";
+        this.shakeDOM.setCssProps({
+          transform: `translate(${dx}px, ${dy}px)`,
+          transition: "transform 0.03s linear"
+        });
       }
       this.shakeTimerId = window.setTimeout(tick, RATE_LIMITS.SHAKE_FRAME_MS);
     };
@@ -677,15 +669,15 @@ var RidiculousViewPlugin = class {
     this.decorations = import_view.Decoration.none;
     this.pendingEffects = [];
     if (this.animFrameId !== null) {
-      cancelAnimationFrame(this.animFrameId);
+      window.cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
     }
     if (this.shakeTimerId !== null) {
-      clearTimeout(this.shakeTimerId);
+      window.clearTimeout(this.shakeTimerId);
       this.shakeTimerId = null;
     }
     if (this.shakeDOM) {
-      this.shakeDOM.style.transform = "";
+      this.shakeDOM.setCssProps({ transform: "" });
     }
   }
   destroy() {
@@ -715,11 +707,14 @@ function createRidiculousPlugin(settings) {
 }
 
 // src/main.ts
-var RidiculousCodingPlugin = class extends import_obsidian3.Plugin {
+var RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
   constructor() {
     super(...arguments);
     this.statusBarItem = null;
-    this.panel = null;
+  }
+  getPanel() {
+    var _a, _b;
+    return (_b = (_a = this.app.workspace.getLeavesOfType(PANEL_VIEW_TYPE)[0]) == null ? void 0 : _a.view) != null ? _b : null;
   }
   async onload() {
     await this.loadSettings();
@@ -737,8 +732,9 @@ var RidiculousCodingPlugin = class extends import_obsidian3.Plugin {
     this.updateStatusBar();
     this.addRibbonIcon("rocket", "Ridiculous Coding", () => this.activatePanel());
     this.addSettingTab(new RidiculousCodingSettingTab(this.app, this, this.xpService));
-    this.registerView(PANEL_VIEW_TYPE, (leaf) => {
-      this.panel = new RidiculousCodingPanel(
+    this.registerView(
+      PANEL_VIEW_TYPE,
+      (leaf) => new RidiculousCodingPanel(
         leaf,
         this.xpService,
         this.settings,
@@ -750,22 +746,21 @@ var RidiculousCodingPlugin = class extends import_obsidian3.Plugin {
           this.xpService.reset();
           this.updateStatusBar();
         }
-      );
-      return this.panel;
-    });
+      )
+    );
     this.addCommand({
       id: "show-panel",
-      name: "Show Ridiculous Coding Panel",
+      name: "Show Panel",
       callback: () => this.activatePanel()
     });
     this.addCommand({
       id: "reset-xp",
       name: "Reset XP",
       callback: () => {
+        var _a;
         this.xpService.reset();
         this.updateStatusBar();
-        if (this.panel)
-          this.panel.refresh();
+        (_a = this.getPanel()) == null ? void 0 : _a.refresh();
       }
     });
   }
@@ -776,10 +771,10 @@ var RidiculousCodingPlugin = class extends import_obsidian3.Plugin {
   registerEditorEvents() {
     this.registerEvent(
       this.app.workspace.on("editor-change", (_editor, _info) => {
+        var _a;
         const leveledUp = this.xpService.addXp(1);
         this.updateStatusBar();
-        if (this.panel)
-          this.panel.refresh();
+        (_a = this.getPanel()) == null ? void 0 : _a.refresh();
         if (!this.settings.reducedEffects && this.settings.sound) {
           this.audioService.play({ type: "blip", pitch: 1 });
         }
@@ -817,18 +812,16 @@ var RidiculousCodingPlugin = class extends import_obsidian3.Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
   }
   async saveSettings() {
+    var _a;
     await this.saveData(this.settings);
     this.xpService.setBaseXp(this.settings.baseXp);
     this.audioService.isEnabled = this.settings.sound;
     this.updateStatusBar();
-    if (this.panel)
-      this.panel.refresh();
+    (_a = this.getPanel()) == null ? void 0 : _a.refresh();
   }
   onunload() {
     this.clearAllDecorations();
     this.audioService.dispose();
     this.fireworks.dispose();
-    this.app.workspace.detachLeavesOfType(PANEL_VIEW_TYPE);
-    this.panel = null;
   }
 };

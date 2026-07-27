@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, requestUrl } from "obsidian";
 import { SoundEvent } from "./types";
 import { PLUGIN_ID } from "./constants";
 
@@ -29,8 +29,8 @@ export class AudioService {
     try {
       const vaultPath = `.obsidian/plugins/${PLUGIN_ID}/${relativePath}`;
       const resourceUrl = this.app.vault.adapter.getResourcePath(vaultPath);
-      const response = await fetch(resourceUrl);
-      const arrayBuffer = await response.arrayBuffer();
+      const response = await requestUrl({ url: resourceUrl });
+      const arrayBuffer = response.arrayBuffer;
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
       this.buffers.set(name, audioBuffer);
     } catch (e) {
@@ -43,7 +43,7 @@ export class AudioService {
 
     // Resume context if suspended (browser autoplay policy)
     if (this.audioContext.state === "suspended") {
-      this.audioContext.resume();
+      void this.audioContext.resume();
     }
 
     let bufferName: string;

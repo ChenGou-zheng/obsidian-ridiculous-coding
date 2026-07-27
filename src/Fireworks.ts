@@ -25,8 +25,7 @@ export class Fireworks {
     this.container.className = FIREWORKS_CLASS;
 
     this.canvas = document.createElement("canvas");
-    this.canvas.style.width = "100%";
-    this.canvas.style.height = "100%";
+    this.canvas.setCssProps({ width: "100%", height: "100%" });
     this.container.appendChild(this.canvas);
     document.body.appendChild(this.container);
 
@@ -42,7 +41,7 @@ export class Fireworks {
     this.animate();
 
     // Auto-hide after 3 seconds
-    setTimeout(() => this.hide(), 3000);
+    window.setTimeout(() => this.hide(), 3000);
   }
 
   private spawnBurst(x: number, y: number): void {
@@ -90,7 +89,7 @@ export class Fireworks {
     });
 
     if (this.particles.length > 0) {
-      this.animId = requestAnimationFrame(this.animate);
+      this.animId = window.requestAnimationFrame(this.animate);
     } else {
       this.hide();
     }
@@ -98,7 +97,7 @@ export class Fireworks {
 
   hide(): void {
     if (this.animId !== null) {
-      cancelAnimationFrame(this.animId);
+      window.cancelAnimationFrame(this.animId);
       this.animId = null;
     }
     this.particles = [];

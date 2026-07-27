@@ -18,6 +18,13 @@ export interface XPData {
   xpLevelStart: number;
 }
 
+export interface IPlugin {
+  settings: Settings & Partial<XPData>;
+  saveSettings(): Promise<void>;
+  updateStatusBar(): void;
+  clearAllDecorations(): void;
+}
+
 export type SoundEvent =
   | { type: "blip"; pitch: number }
   | { type: "boom" }

@@ -28,30 +28,25 @@ class FloatingLabelWidget extends WidgetType {
     const span = document.createElement("span");
     span.className = "rc-floating-label";
     span.textContent = this.text;
-    span.style.color = this.color;
-    span.style.fontSize = `${this.fontSize}px`;
-    span.style.fontWeight = "bold";
-    span.style.fontFamily = "monospace";
-    span.style.position = "absolute";
-    span.style.pointerEvents = "none";
-    span.style.zIndex = "1000";
+    span.setCssProps({
+      color: this.color,
+      fontSize: `${this.fontSize}px`,
+    });
 
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReducedMotion) {
-      // Static display — no animation
-      span.style.opacity = "0.8";
-      setTimeout(() => span.remove(), 300);
+      span.addClass("rc-floating-label-reduced");
+      window.setTimeout(() => span.remove(), 300);
     } else {
-      span.style.transform = "translateY(-1.1em) scale(1.6)";
-      span.style.transformOrigin = "left bottom";
-      span.style.transition = "transform 0.4s ease-out, opacity 0.4s ease-out";
       // Trigger float animation on next frame
-      requestAnimationFrame(() => {
-        span.style.transform = "translateY(-2.5em) scale(1.0)";
-        span.style.opacity = "0";
+      window.requestAnimationFrame(() => {
+        span.setCssProps({
+          transform: "translateY(-2.5em) scale(1.0)",
+          opacity: "0",
+        });
       });
       // Remove from DOM after animation
-      setTimeout(() => span.remove(), 450);
+      window.setTimeout(() => span.remove(), 450);
     }
 
     return span;
@@ -71,10 +66,6 @@ class IconWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement("span");
     span.className = `rc-icon rc-icon-${this.iconName}`;
-    span.style.display = "inline-block";
-    span.style.height = "1em";
-    span.style.position = "relative";
-    span.style.pointerEvents = "none";
     return span;
   }
 }
@@ -187,7 +178,7 @@ class RidiculousViewPlugin {
 
   private scheduleAnimation(): void {
     if (this.animFrameId !== null) return;
-    this.animFrameId = requestAnimationFrame(() => this.applyEffects());
+    this.animFrameId = window.requestAnimationFrame(() => this.applyEffects());
   }
 
   private applyEffects(): void {
@@ -245,7 +236,7 @@ class RidiculousViewPlugin {
     this.pendingEffects = [];
 
     // Clear decorations after a short delay
-    setTimeout(() => {
+    window.setTimeout(() => {
       this.decorations = Decoration.none;
       this.view.dispatch();
     }, 400);
@@ -278,7 +269,7 @@ class RidiculousViewPlugin {
       if (now >= this.shakeEndAt) {
         this.shakeTimerId = null;
         if (this.shakeDOM) {
-          this.shakeDOM.style.transform = "";
+          this.shakeDOM.setCssProps({ transform: "" });
         }
         return;
       }
@@ -289,8 +280,10 @@ class RidiculousViewPlugin {
       const dy = Math.round(Math.sin(angle) * amplitude);
 
       if (this.shakeDOM) {
-        this.shakeDOM.style.transform = `translate(${dx}px, ${dy}px)`;
-        this.shakeDOM.style.transition = "transform 0.03s linear";
+        this.shakeDOM.setCssProps({
+          transform: `translate(${dx}px, ${dy}px)`,
+          transition: "transform 0.03s linear",
+        });
       }
 
       this.shakeTimerId = window.setTimeout(tick, RATE_LIMITS.SHAKE_FRAME_MS);
@@ -310,15 +303,15 @@ class RidiculousViewPlugin {
     this.decorations = Decoration.none;
     this.pendingEffects = [];
     if (this.animFrameId !== null) {
-      cancelAnimationFrame(this.animFrameId);
+      window.cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
     }
     if (this.shakeTimerId !== null) {
-      clearTimeout(this.shakeTimerId);
+      window.clearTimeout(this.shakeTimerId);
       this.shakeTimerId = null;
     }
     if (this.shakeDOM) {
-      this.shakeDOM.style.transform = "";
+      this.shakeDOM.setCssProps({ transform: "" });
     }
   }
 

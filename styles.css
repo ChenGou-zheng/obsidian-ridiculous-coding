@@ -57,14 +57,25 @@
   position: absolute;
   pointer-events: none;
   z-index: 1000;
+  font-weight: bold;
+  font-family: monospace;
+  transform: translateY(-1.1em) scale(1.6);
+  transform-origin: left bottom;
+  transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+}
+
+.rc-floating-label.rc-floating-label-reduced {
+  opacity: 0.8;
+  transform: none;
+  transition: none;
 }
 
 /* ── EffectManager: Icon decorations (blip, boom, newline) ── */
 
 .rc-icon {
   display: inline-block;
-  width: 16px;
-  height: 16px;
+  width: 1em;
+  height: 1em;
   background-size: contain;
   background-repeat: no-repeat;
   position: relative;

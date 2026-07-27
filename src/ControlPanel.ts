@@ -45,7 +45,7 @@ export class RidiculousCodingPanel extends ItemView {
     container.addClass("ridiculous-coding-panel");
 
     // Level display
-    const header = container.createEl("h3", { text: `🚀 Level ${this.xpService.level}` });
+    container.createEl("h3", { text: `🚀 Level ${this.xpService.level}` });
 
     // XP Progress
     const prog = this.xpService.progress;

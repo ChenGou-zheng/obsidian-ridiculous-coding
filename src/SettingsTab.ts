@@ -1,12 +1,13 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import { Settings } from "./types";
+import type { Plugin } from "obsidian";
+import { IPlugin } from "./types";
 import { XPService } from "./XPService";
 
 export class RidiculousCodingSettingTab extends PluginSettingTab {
-  private plugin: any;
+  private plugin: IPlugin;
   private xpService: XPService;
 
-  constructor(app: App, plugin: any, xpService: XPService) {
+  constructor(app: App, plugin: IPlugin & Plugin, xpService: XPService) {
     super(app, plugin);
     this.plugin = plugin;
     this.xpService = xpService;
@@ -16,7 +17,7 @@ export class RidiculousCodingSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Ridiculous Coding" });
+    new Setting(containerEl).setName("Ridiculous Coding").setHeading();
 
     new Setting(containerEl)
       .setName("Blip effects")
@@ -73,7 +74,6 @@ export class RidiculousCodingSettingTab extends PluginSettingTab {
         slider
           .setLimits(0, 32, 1)
           .setValue(this.plugin.settings.shakeAmplitude)
-          .setDynamicTooltip()
           .onChange(async (value) => {
             this.plugin.settings.shakeAmplitude = value;
             await this.plugin.saveSettings();
@@ -111,7 +111,6 @@ export class RidiculousCodingSettingTab extends PluginSettingTab {
         slider
           .setLimits(10, 200, 5)
           .setValue(this.plugin.settings.baseXp)
-          .setDynamicTooltip()
           .onChange(async (value) => {
             this.plugin.settings.baseXp = value;
             this.xpService.setBaseXp(value);
@@ -142,7 +141,7 @@ export class RidiculousCodingSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
             if (value) {
               // Clear all decorations
-              this.plugin.clearAllDecorations?.();
+              this.plugin.clearAllDecorations();
             }
           })
       );
@@ -155,12 +154,12 @@ export class RidiculousCodingSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText("Reset")
-          .setWarning()
+          .setDestructive()
           .onClick(() => {
             this.xpService.reset();
-            this.plugin.updateStatusBar?.();
+            this.plugin.updateStatusBar();
             button.setButtonText("Reset ✓");
-            setTimeout(() => button.setButtonText("Reset"), 2000);
+            window.setTimeout(() => button.setButtonText("Reset"), 2000);
           })
       );
   }

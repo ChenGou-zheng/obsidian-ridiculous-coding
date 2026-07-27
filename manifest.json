@@ -2,10 +2,9 @@
   "id": "ridiculous-coding",
   "name": "Ridiculous Coding",
   "version": "1.0.0",
-  "minAppVersion": "0.15.0",
+  "minAppVersion": "1.0.0",
   "description": "Blips, booms, fireworks, XP and levels — make your editing experience ridiculous!",
   "author": "ChenGou-zheng",
   "authorUrl": "https://github.com/ChenGou-zheng",
-  "repository": "https://github.com/ChenGou-zheng/obsidian-ridiculous-coding",
   "isDesktopOnly": false
 }

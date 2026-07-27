@@ -1,21 +1,21 @@
-import { Settings, XPData } from "./types";
+import { Settings, XPData, IPlugin } from "./types";
 
 export class XPService {
-  private plugin: any; // Obsidian Plugin instance
+  private plugin: IPlugin;
   private baseXp: number;
   xp: number = 0;
   level: number = 1;
   xpNextAbs: number;
   xpLevelStart: number = 0;
 
-  constructor(plugin: any, baseXp: number) {
+  constructor(plugin: IPlugin, baseXp: number) {
     this.plugin = plugin;
     this.baseXp = baseXp;
-    const saved = plugin.settings as Settings & XPData;
-    this.xp = (saved as any).xp ?? 0;
-    this.level = (saved as any).level ?? 1;
-    this.xpLevelStart = (saved as any).xpLevelStart ?? 0;
-    this.xpNextAbs = (saved as any).xpNextAbs ?? 2 * baseXp;
+    const saved = plugin.settings;
+    this.xp = saved.xp ?? 0;
+    this.level = saved.level ?? 1;
+    this.xpLevelStart = saved.xpLevelStart ?? 0;
+    this.xpNextAbs = saved.xpNextAbs ?? 2 * baseXp;
   }
 
   get progress(): { current: number; max: number } {
@@ -55,7 +55,7 @@ export class XPService {
   }
 
   private save(): void {
-    const data = this.plugin.settings as any;
+    const data = this.plugin.settings;
     data.xp = this.xp;
     data.level = this.level;
     data.xpNextAbs = this.xpNextAbs;
