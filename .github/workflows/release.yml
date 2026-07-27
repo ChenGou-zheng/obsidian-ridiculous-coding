@@ -52,18 +52,20 @@ jobs:
           cp -r media release/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/main.js
-            release/manifest.json
-            release/styles.css
-            release/media/blip.svg
-            release/media/boom.svg
-            release/media/newline.svg
-            release/media/font/GravityBold8.ttf
-            release/media/sound/blip.wav
-            release/media/sound/boom.wav
-            release/media/sound/fireworks.wav
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "v$TAG_VERSION" \
+            "release/main.js" \
+            "release/manifest.json" \
+            "release/styles.css" \
+            "release/media/blip.svg#media/blip.svg" \
+            "release/media/boom.svg#media/boom.svg" \
+            "release/media/newline.svg#media/newline.svg" \
+            "release/media/font/GravityBold8.ttf#media/font/GravityBold8.ttf" \
+            "release/media/sound/blip.wav#media/sound/blip.wav" \
+            "release/media/sound/boom.wav#media/sound/boom.wav" \
+            "release/media/sound/fireworks.wav#media/sound/fireworks.wav" \
+            --target "${{ github.sha }}" \
+            --generate-notes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
