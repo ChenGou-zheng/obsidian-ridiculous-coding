@@ -328,12 +328,21 @@ class RidiculousViewPlugin {
   }
 }
 
+// ── Module-level instance reference for external cleanup ──
+
+let activeInstance: RidiculousViewPlugin | null = null;
+
+export function clearActiveDecorations(): void {
+  activeInstance?.clearDecorations();
+}
+
 // ── Factory function ──
 
 export function createRidiculousPlugin(settings: Settings) {
   class RidiculousPluginAdapter extends RidiculousViewPlugin {
     constructor(view: EditorView) {
       super(view, settings);
+      activeInstance = this;
     }
   }
   return ViewPlugin.fromClass(RidiculousPluginAdapter, {

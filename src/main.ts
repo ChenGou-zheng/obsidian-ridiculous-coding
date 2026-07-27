@@ -6,7 +6,7 @@ import { AudioService } from "./AudioService";
 import { RidiculousCodingSettingTab } from "./SettingsTab";
 import { RidiculousCodingPanel } from "./ControlPanel";
 import { Fireworks } from "./Fireworks";
-import { createRidiculousPlugin } from "./EffectManager";
+import { createRidiculousPlugin, clearActiveDecorations } from "./EffectManager";
 
 export default class RidiculousCodingPlugin extends Plugin {
   settings: Settings & { xp?: number; level?: number; xpNextAbs?: number; xpLevelStart?: number };
@@ -88,22 +88,21 @@ export default class RidiculousCodingPlugin extends Plugin {
   private registerEditorEvents(): void {
     this.registerEvent(
       this.app.workspace.on("editor-change", (_editor: Editor, _info: any) => {
-        // Award XP per edit event (visual effects handled by CM ViewPlugin)
-        if (!this.settings.reducedEffects) {
-          const leveledUp = this.xpService.addXp(1);
-          this.updateStatusBar();
+        // Always award XP (visual effects handled by CM ViewPlugin)
+        const leveledUp = this.xpService.addXp(1);
+        this.updateStatusBar();
+        if (this.panel) this.panel.refresh();
 
-          // Play audio for the edit
+        // Play audio only if effects are enabled
+        if (!this.settings.reducedEffects && this.settings.sound) {
           this.audioService.play({ type: "blip", pitch: 1 });
-
-          // Trigger fireworks on level-up
-          if (leveledUp && this.settings.fireworks) {
-            this.fireworks.show();
-            this.audioService.play({ type: "fireworks" });
-          }
         }
 
-        if (this.panel) this.panel.refresh();
+        // Trigger fireworks on level-up (visual + audio)
+        if (leveledUp && !this.settings.reducedEffects && this.settings.fireworks) {
+          this.fireworks.show();
+          this.audioService.play({ type: "fireworks" });
+        }
       })
     );
   }
@@ -131,7 +130,7 @@ export default class RidiculousCodingPlugin extends Plugin {
   }
 
   clearAllDecorations(): void {
-    // EffectManager handles this internally via its ViewPlugin lifecycle
+    clearActiveDecorations();
   }
 
   async loadSettings() {
