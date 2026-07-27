@@ -41,6 +41,9 @@ export default class RidiculousCodingPlugin extends Plugin {
     };
     this.updateStatusBar();
 
+    // Ribbon icon
+    this.addRibbonIcon("rocket", "Ridiculous Coding", () => this.activatePanel());
+
     // Settings tab
     this.addSettingTab(new RidiculousCodingSettingTab(this.app, this, this.xpService));
 
@@ -147,8 +150,11 @@ export default class RidiculousCodingPlugin extends Plugin {
   }
 
   onunload() {
+    this.clearAllDecorations();
     this.audioService.dispose();
     this.fireworks.dispose();
+    // Clean up panel
+    this.app.workspace.detachLeavesOfType(PANEL_VIEW_TYPE);
     this.panel = null;
   }
 }

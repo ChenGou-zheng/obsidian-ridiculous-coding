@@ -72,7 +72,6 @@ class IconWidget extends WidgetType {
     const span = document.createElement("span");
     span.className = `rc-icon rc-icon-${this.iconName}`;
     span.style.display = "inline-block";
-    span.style.width = "0";
     span.style.height = "1em";
     span.style.position = "relative";
     span.style.pointerEvents = "none";
@@ -330,10 +329,12 @@ class RidiculousViewPlugin {
 
 // ── Module-level instance reference for external cleanup ──
 
-let activeInstance: RidiculousViewPlugin | null = null;
+const activeInstances = new Set<RidiculousViewPlugin>();
 
 export function clearActiveDecorations(): void {
-  activeInstance?.clearDecorations();
+  for (const inst of activeInstances) {
+    inst.clearDecorations();
+  }
 }
 
 // ── Factory function ──
@@ -342,7 +343,11 @@ export function createRidiculousPlugin(settings: Settings) {
   class RidiculousPluginAdapter extends RidiculousViewPlugin {
     constructor(view: EditorView) {
       super(view, settings);
-      activeInstance = this;
+      activeInstances.add(this);
+    }
+    destroy(): void {
+      super.destroy();
+      activeInstances.delete(this);
     }
   }
   return ViewPlugin.fromClass(RidiculousPluginAdapter, {

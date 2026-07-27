@@ -1,6 +1,5 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import { Settings } from "./types";
-import { DEFAULT_SETTINGS } from "./constants";
 import { XPService } from "./XPService";
 
 export class RidiculousCodingSettingTab extends PluginSettingTab {
