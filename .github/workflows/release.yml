@@ -20,15 +20,24 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Verify version consistency
+      - name: Sync version from tag
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
-          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
-            echo "❌ Tag version ($TAG_VERSION) does not match manifest.json ($MANIFEST_VERSION)"
-            exit 1
-          fi
-          echo "✅ Tag v$TAG_VERSION matches manifest.json"
+          echo "Tag version: $TAG_VERSION"
+          # Sync manifest.json version
+          node -e "
+            const m = require('./manifest.json');
+            m.version = '$TAG_VERSION';
+            require('fs').writeFileSync('./manifest.json', JSON.stringify(m, null, '\t') + '\n');
+          "
+          # Sync versions.json
+          node -e "
+            const v = require('./versions.json');
+            const minApp = require('./manifest.json').minAppVersion;
+            v['$TAG_VERSION'] = minApp;
+            require('fs').writeFileSync('./versions.json', JSON.stringify(v, null, '\t') + '\n');
+          "
+          echo "✅ Synced manifest.json + versions.json to v$TAG_VERSION"
 
       - name: Install dependencies
         run: npm ci
