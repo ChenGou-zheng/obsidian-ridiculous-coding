@@ -1,6 +1,6 @@
 {
   "name": "obsidian-ridiculous-coding",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Make your Obsidian editing experience 1000x more ridiculous with blips, booms, fireworks, XP and levels",
   "main": "main.js",
   "scripts": {
