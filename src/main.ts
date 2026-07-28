@@ -6,7 +6,7 @@ import { AudioService } from "./AudioService";
 import { RidiculousCodingSettingTab } from "./SettingsTab";
 import { RidiculousCodingPanel } from "./ControlPanel";
 import { Fireworks } from "./Fireworks";
-import { createRidiculousPlugin, clearActiveDecorations, setFontBase64, loadSpriteData, wasLastEditDelete } from "./EffectManager";
+import { createRidiculousPlugin, clearAllEffects, setFontBase64, loadSpriteData, wasLastEditDelete } from "./EffectManager";
 
 export default class RidiculousCodingPlugin extends Plugin {
   settings: Settings & { xp?: number; level?: number; xpNextAbs?: number; xpLevelStart?: number };
@@ -181,7 +181,7 @@ export default class RidiculousCodingPlugin extends Plugin {
   }
 
   clearAllDecorations(): void {
-    clearActiveDecorations();
+    clearAllEffects();
   }
 
   async loadSettings() {

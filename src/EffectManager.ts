@@ -4,15 +4,13 @@ import {
   EditorView,
   ViewPlugin,
   ViewUpdate,
-  WidgetType,
 } from "@codemirror/view";
 
-import { Range } from "@codemirror/state";
 import { App, requestUrl } from "obsidian";
 import { PLUGIN_ID, RATE_LIMITS } from "./constants";
 import { Settings } from "./types";
 
-// ── Module-level: last edit type for audio selection (read by main.ts) ──
+// ── Module-level: last edit type for audio selection ──
 
 let lastEditWasDelete = false;
 export function wasLastEditDelete(): boolean { return lastEditWasDelete; }
@@ -20,10 +18,6 @@ export function wasLastEditDelete(): boolean { return lastEditWasDelete; }
 // ── Font base64 (lazy-loaded by main.ts) ──
 
 let fontBase64: string | null = null;
-function getFontBase64(): string {
-  if (fontBase64) return fontBase64;
-  return "";
-}
 export function setFontBase64(b64: string) { fontBase64 = b64; }
 
 // ── Sprite sheet data types & cache ──
@@ -110,255 +104,57 @@ export function getSpriteData(kind: string): SpriteData | undefined {
   return spriteDataCache.get(kind);
 }
 
-// ── Widget: Floating char label (blip/boom text) ──
+// ── Module-level overlay DOM tracking for forced cleanup ──
 
-class FloatingLabelWidget extends WidgetType {
-  private text: string;
-  private color: string;
-  private fontSize: number;
-  private ttl: number;
-  private createdAt: number;
-  private spanEl: HTMLSpanElement | null = null;
-  private animTimer: number | null = null;
+let allOverlays: HTMLElement[] = [];
 
-  constructor(text: string, color: string, fontSize: number, ttl: number) {
-    super();
-    this.text = text;
-    this.color = color;
-    this.fontSize = fontSize;
-    this.ttl = ttl;
-    this.createdAt = Date.now();
-  }
+function track(el: HTMLElement): void {
+  allOverlays.push(el);
+}
 
-  toDOM(_view: EditorView): HTMLElement {
-    const wrap = document.createElement("span");
-    wrap.className = "rc-widget-container";
+function untrack(el: HTMLElement): void {
+  allOverlays = allOverlays.filter(x => x !== el);
+}
 
-    const label = document.createElement("span");
-    label.className = "rc-label";
-    label.textContent = this.text;
-    label.style.color = this.color;
-    label.style.fontSize = `${this.fontSize}px`;
+// ── Module-level instance registry for shake cleanup ──
 
-    this.spanEl = label;
-    wrap.appendChild(label);
+const activeInstances = new Set<RidiculousViewPluginClass>();
 
-    this.startAnimation();
-
-    return wrap;
-  }
-
-  private startAnimation(): void {
-    const floatEm = 0.7;
-    const scaleAdd = 0.6;
-
-    const tick = () => {
-      if (!this.spanEl) return;
-      const now = Date.now();
-      const age = now - this.createdAt;
-      const progress = Math.max(0, Math.min(1, age / this.ttl));
-      const y = -(1.1 + floatEm * progress);
-      const s = 1.6 + scaleAdd * progress;
-      this.spanEl.style.transform = `translateY(${y}em) scale(${s})`;
-
-      if (progress < 1) {
-        this.animTimer = window.setTimeout(tick, 50);
-      }
-    };
-
-    this.animTimer = window.setTimeout(tick, 50);
-  }
-
-  destroy(_dom: HTMLElement): void {
-    if (this.animTimer !== null) {
-      window.clearTimeout(this.animTimer);
-      this.animTimer = null;
-    }
-    this.spanEl = null;
+export function clearAllEffects(): void {
+  // Remove all overlay DOM elements
+  for (const el of allOverlays) el.remove();
+  allOverlays = [];
+  // Stop shake on all active instances
+  for (const inst of activeInstances) {
+    inst.stopShake();
   }
 }
 
-// ── Widget: Icon decoration (blip/boom/newline SVG icon) ──
+// ── ViewPlugin implementation ──
 
-class IconWidget extends WidgetType {
-  private iconName: string;
-  private domEl: HTMLElement | null = null;
+const TRAIL_BLIP_MS = 400;
+const TRAIL_BOOM_MS = 650;
+const TRAIL_NEWLINE_MS = 350;
 
-  constructor(iconName: string) {
-    super();
-    this.iconName = iconName;
-  }
-
-  toDOM(view: EditorView): HTMLElement {
-    const wrap = document.createElement("span");
-    wrap.className = "rc-widget-container";
-
-    const icon = document.createElement("span");
-    icon.className = `rc-icon rc-icon-${this.iconName}`;
-    icon.innerHTML = this.getSVG();
-    wrap.appendChild(icon);
-
-    this.domEl = wrap;
-    return wrap;
-  }
-
-  setTransform(y: number, s: number): void {
-    if (this.domEl) {
-      this.domEl.style.transform = `translateY(${y}em) scale(${s})`;
-    }
-  }
-
-  destroy(_dom: HTMLElement): void {
-    this.domEl = null;
-  }
-
-  private getSVG(): string {
-    // Simple inline SVGs — no external file dependency at runtime
-    switch (this.iconName) {
-      case "blip":
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="18" height="18"><circle cx="9" cy="9" r="6" fill="url(#blip-g)" opacity="0.9"/><defs><radialGradient id="blip-g"><stop offset="0%" stop-color="#ff0"/><stop offset="100%" stop-color="#f0f"/></radialGradient></defs></svg>`;
-      case "boom":
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><circle cx="16" cy="16" r="14" fill="#ff4400" opacity="0.8"/><circle cx="16" cy="16" r="14" fill="none" stroke="#ffaa00" stroke-width="3" opacity="0.6" transform="scale(0.8) translate(4,4)"/></svg>`;
-      case "newline":
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="14" height="14"><path d="M4 4v6h6" fill="none" stroke="#4fc3f7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 10L4 4" fill="none" stroke="#4fc3f7" stroke-width="2.5" stroke-linecap="round"/></svg>`;
-      default:
-        return "";
-    }
-  }
-}
-
-// ── Widget: Sprite sheet animated icon (replaces static IconWidget SVG) ──
-
-class SpriteIconWidget extends WidgetType {
-  private spriteData: SpriteData;
-  private kind: string;
-  private currentFrame = 0;
-  private imgEl: HTMLImageElement | null = null;
-  private domEl: HTMLElement | null = null;
-  private frameTimer: number | null = null;
-
-  constructor(spriteData: SpriteData, kind: string) {
-    super();
-    this.spriteData = spriteData;
-    this.kind = kind;
-  }
-
-  toDOM(_view: EditorView): HTMLElement {
-    const wrap = document.createElement("span");
-    wrap.className = "rc-widget-container";
-
-    const img = document.createElement("img");
-    img.className = `rc-icon rc-icon-${this.kind} rc-sprite-icon`;
-    img.src = this.spriteData.frameUris[0];
-
-    // Size each kind to approximate the original Godot pixel-art proportions
-    switch (this.kind) {
-      case "blip":
-        img.style.width = "18px"; img.style.height = "18px";
-        break;
-      case "boom":
-        img.style.width = "32px"; img.style.height = "32px";
-        break;
-      case "newline":
-        img.style.width = "14px"; img.style.height = "14px";
-        break;
-    }
-
-    this.imgEl = img;
-    wrap.appendChild(img);
-    this.domEl = wrap;
-
-    this.startFrameAnim();
-    return wrap;
-  }
-
-  private startFrameAnim(): void {
-    const { frameMs } = this.spriteData;
-    const total = this.spriteData.frameUris.length;
-    if (total <= 1) return;
-
-    const tick = () => {
-      if (!this.imgEl || !this.domEl) return;
-      this.currentFrame++;
-      if (this.currentFrame >= total) return; // animation complete
-      this.imgEl.src = this.spriteData.frameUris[this.currentFrame];
-      this.frameTimer = window.setTimeout(tick, frameMs);
-    };
-
-    this.frameTimer = window.setTimeout(tick, frameMs);
-  }
-
-  setTransform(y: number, s: number): void {
-    if (this.domEl) {
-      this.domEl.style.transform = `translateY(${y}em) scale(${s})`;
-    }
-  }
-
-  destroy(_dom: HTMLElement): void {
-    if (this.frameTimer !== null) {
-      window.clearTimeout(this.frameTimer);
-      this.frameTimer = null;
-    }
-    this.imgEl = null;
-    this.domEl = null;
-  }
-}
-
-// ── ViewPlugin ──
-
-interface PendingEffect {
-  type: "blip" | "boom" | "newline";
-  pos: number;
-  charLabel?: string;
-}
-
-class RidiculousViewPlugin {
+// Declare the class type up front so activeInstances can reference it
+class RidiculousViewPluginClass {
   decorations: DecorationSet = Decoration.none;
   private view: EditorView;
   private settings: Settings;
-  private pendingEffects: PendingEffect[] = [];
-  private animFrameId: number | null = null;
-  private lastBlipTime: number = 0;
-  private lastBoomTime: number = 0;
-  private shakeEndAt: number = 0;
+  private lastBlipTime = 0;
+  private lastBoomTime = 0;
+
+  // Shake state
+  private shakeEndAt = 0;
   private shakeTimerId: number | null = null;
-  private shakeDOM: HTMLElement | null = null;
-
-  // Lifetime-tracked overlay system: each batch keeps its own decorations
-  private activeItems: Array<{
-    id: number;
-    type: string;
-    decorations: Range<Decoration>[];
-    iconWidget: IconWidget | SpriteIconWidget | null;
-    ttl: number;
-    createdAt: number;
-  }> = [];
-  private nextId = 0;
-
-  // ── Combo trail animation constants ──
-
-  private static readonly TRAIL_BLIP_MS = 400;
-  private static readonly TRAIL_BOOM_MS = 650;
-  private static readonly TRAIL_NEWLINE_MS = 350;
-  private static readonly TRAIL_FRAME_MS = 50;
-  private static readonly TRAIL_FLOAT_EM = 0.7;
-  private static readonly TRAIL_SCALE_ADD = 0.6;
-  private static readonly MAX_TRAIL = 5;
-
-  private animTimers: Map<string, number> = new Map();
-
-  // Color generation matching the Godot original
-  private static randomGodotColor(): string {
-    const r = Math.min(255, Math.round(Math.random() * 510));
-    const g = Math.min(255, Math.round(Math.random() * 510));
-    const b = Math.min(255, Math.round(Math.random() * 510));
-    return `rgb(${Math.min(255, r)}, ${Math.min(255, g)}, ${Math.min(255, b)})`;
-  }
 
   constructor(view: EditorView, settings: Settings) {
     this.view = view;
     this.settings = settings;
+    activeInstances.add(this);
   }
+
+  // ── Helpers ──
 
   private getEditorFontSizePx(): number {
     try {
@@ -370,6 +166,161 @@ class RidiculousViewPlugin {
       return 14;
     }
   }
+
+  private static randomGodotColor(): string {
+    const r = Math.min(255, Math.round(Math.random() * 510));
+    const g = Math.min(255, Math.round(Math.random() * 510));
+    const b = Math.min(255, Math.round(Math.random() * 510));
+    return `rgb(${Math.min(255, r)}, ${Math.min(255, g)}, ${Math.min(255, b)})`;
+  }
+
+  private sanitizeLabel(ch: string): string {
+    if (ch === "\n") return "";
+    if (ch === "\t") return "\u21B9";
+    if (ch.trim() === "") return "SPACE";
+    return ch;
+  }
+
+  // ── DOM Overlay: Floating Label ──
+
+  private showFloatingLabel(pos: number, text: string, color: string, ttl: number): void {
+    const coords = this.view.coordsAtPos(pos);
+    if (!coords) return;
+
+    const label = document.createElement("span");
+    label.className = "rc-overlay-label";
+    label.textContent = text;
+    label.style.cssText = `
+      position: fixed;
+      left: ${coords.left}px;
+      top: ${coords.top}px;
+      color: ${color};
+      font-size: ${this.getEditorFontSizePx()}px;
+      font-family: "GravityBold8", "Cascadia Code", "Consolas", monospace;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 1000;
+      transform: translateY(-1.1em) scale(1.6);
+      transform-origin: left bottom;
+      white-space: nowrap;
+    `;
+    document.body.appendChild(label);
+    track(label);
+
+    const createdAt = Date.now();
+    const floatEm = 0.7;
+    const scaleAdd = 0.6;
+
+    const tick = () => {
+      const age = Date.now() - createdAt;
+      const progress = Math.max(0, Math.min(1, age / ttl));
+      if (progress >= 1) {
+        label.remove();
+        untrack(label);
+        return;
+      }
+      const y = -(1.1 + floatEm * progress);
+      const s = 1.6 + scaleAdd * progress;
+      label.style.transform = `translateY(${y}em) scale(${s})`;
+      window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+  }
+
+  // ── DOM Overlay: Sprite Animation ──
+
+  private playSpriteAnim(kind: string, pos: number): void {
+    const coords = this.view.coordsAtPos(pos);
+    if (!coords) return;
+    const data = getSpriteData(kind);
+    if (!data) return;
+
+    const img = document.createElement("img");
+    img.className = "rc-overlay-sprite";
+    img.src = data.frameUris[0];
+    img.style.cssText = `
+      position: fixed;
+      left: ${coords.left}px;
+      top: ${coords.top}px;
+      pointer-events: none;
+      z-index: 1000;
+    `;
+
+    // Size and centering per kind
+    switch (kind) {
+      case "boom":
+        img.style.width = "32px"; img.style.height = "32px";
+        img.style.marginTop = "-16px"; img.style.marginLeft = "-16px";
+        break;
+      case "blip":
+        img.style.width = "18px"; img.style.height = "18px";
+        img.style.marginTop = "-9px"; img.style.marginLeft = "-9px";
+        break;
+      case "newline":
+        img.style.width = "14px"; img.style.height = "14px";
+        img.style.marginTop = "-7px"; img.style.marginLeft = "-7px";
+        break;
+    }
+
+    document.body.appendChild(img);
+    track(img);
+
+    let frame = 0;
+    const tick = () => {
+      frame++;
+      if (frame >= data.frameUris.length) {
+        img.remove();
+        untrack(img);
+        return;
+      }
+      img.src = data.frameUris[frame];
+      window.setTimeout(tick, data.frameMs);
+    };
+    window.setTimeout(tick, data.frameMs);
+  }
+
+  // ── Screen Shake ──
+
+  private triggerShake(extendMs: number): void {
+    if (!this.settings.shake) return;
+
+    const now = Date.now();
+    const maxEnd = now + RATE_LIMITS.MAX_SHAKE_TOTAL_MS;
+    this.shakeEndAt = Math.min(
+      Math.max(this.shakeEndAt, now + Math.max(extendMs, this.settings.shakeDecayMs)),
+      maxEnd
+    );
+
+    if (this.shakeTimerId === null) {
+      this.startShakeLoop();
+    }
+  }
+
+  private startShakeLoop(): void {
+    const tick = () => {
+      if (Date.now() >= this.shakeEndAt) {
+        this.shakeTimerId = null;
+        this.view.dom.style.transform = "";
+        return;
+      }
+      const amp = this.settings.shakeAmplitude;
+      const angle = Math.random() * Math.PI * 2;
+      this.view.dom.style.transform = `translate(${Math.round(Math.cos(angle) * amp)}px, ${Math.round(Math.sin(angle) * amp)}px)`;
+      this.shakeTimerId = window.setTimeout(tick, RATE_LIMITS.SHAKE_FRAME_MS);
+    };
+    tick();
+  }
+
+  stopShake(): void {
+    if (this.shakeTimerId !== null) {
+      window.clearTimeout(this.shakeTimerId);
+      this.shakeTimerId = null;
+    }
+    this.shakeEndAt = 0;
+    this.view.dom.style.transform = "";
+  }
+
+  // ── CM6 ViewPlugin lifecycle ──
 
   update(update: ViewUpdate): void {
     if (!update.docChanged) return;
@@ -394,32 +345,27 @@ class RidiculousViewPlugin {
     }
   }
 
-  private pendingCount(type: PendingEffect["type"]): number {
-    return this.pendingEffects.filter((e) => e.type === type).length;
-  }
-
   private handleInsert(pos: number, text: string): void {
     const now = Date.now();
     if (now - this.lastBlipTime < RATE_LIMITS.BLIP_MS) return;
     this.lastBlipTime = now;
 
-    if (
-      text.includes("\n") &&
-      this.settings.blips &&
-      this.pendingCount("newline") < RATE_LIMITS.MAX_DECORATIONS_PER_TYPE
-    ) {
-      this.pendingEffects.push({ type: "newline", pos });
-    }
+    if (this.settings.blips) {
+      // Newline effect
+      if (text.includes("\n")) {
+        this.playSpriteAnim("newline", pos);
+      }
 
-    if (
-      this.settings.blips &&
-      this.pendingCount("blip") < RATE_LIMITS.MAX_DECORATIONS_PER_TYPE
-    ) {
-      const charLabel = this.settings.chars ? this.sanitizeLabel(text[0]) : undefined;
-      this.pendingEffects.push({ type: "blip", pos, charLabel });
-    }
+      // Blip floating label
+      if (this.settings.chars) {
+        const charLabel = this.sanitizeLabel(text[0]);
+        const color = RidiculousViewPluginClass.randomGodotColor();
+        this.showFloatingLabel(pos, charLabel, color, TRAIL_BLIP_MS);
+      }
 
-    this.scheduleAnimation();
+      // Blip sprite
+      this.playSpriteAnim("blip", pos);
+    }
 
     if (this.settings.shake) {
       this.triggerShake(text.includes("\n") ? 140 : 120);
@@ -431,302 +377,39 @@ class RidiculousViewPlugin {
     if (now - this.lastBoomTime < RATE_LIMITS.BOOM_MS) return;
     this.lastBoomTime = now;
 
-    if (
-      this.settings.explosions &&
-      this.pendingCount("boom") < RATE_LIMITS.MAX_DECORATIONS_PER_TYPE
-    ) {
-      const charLabel = this.settings.chars ? "BACKSPACE" : undefined;
-      this.pendingEffects.push({ type: "boom", pos, charLabel });
-    }
+    if (this.settings.explosions) {
+      // Boom floating label
+      if (this.settings.chars) {
+        const color = RidiculousViewPluginClass.randomGodotColor();
+        this.showFloatingLabel(pos, "BACKSPACE", color, TRAIL_BOOM_MS);
+      }
 
-    this.scheduleAnimation();
+      // Boom sprite
+      this.playSpriteAnim("boom", pos);
+    }
 
     if (this.settings.shake) {
       this.triggerShake(180);
     }
   }
 
-  private scheduleAnimation(): void {
-    if (this.animFrameId !== null) return;
-    this.animFrameId = window.requestAnimationFrame(() => this.applyEffects());
-  }
-
-  private rebuildDecorations(): void {
-    const all: Range<Decoration>[] = [];
-    for (const item of this.activeItems) {
-      all.push(...item.decorations);
-    }
-    this.decorations = Decoration.set(all);
-    this.view.dispatch();
-  }
-
-  private applyEffects(): void {
-    this.animFrameId = null;
-    if (this.pendingEffects.length === 0) return;
-
-    const typesTriggered = new Set<string>();
-
-    for (const effect of this.pendingEffects) {
-      const pos = Math.min(effect.pos, this.view.state.doc.length);
-      if (pos >= this.view.state.doc.length) continue;
-
-      typesTriggered.add(effect.type);
-      const cursorPos = pos;
-      const itemDecorations: Range<Decoration>[] = [];
-      let iconWidget: IconWidget | SpriteIconWidget | null = null;
-      let ttl: number;
-
-      switch (effect.type) {
-        case "blip": {
-          ttl = RidiculousViewPlugin.TRAIL_BLIP_MS;
-          const color = RidiculousViewPlugin.randomGodotColor();
-          if (effect.charLabel && this.settings.chars) {
-            const widget = new FloatingLabelWidget(effect.charLabel, color, this.getEditorFontSizePx(), ttl);
-            itemDecorations.push(
-              Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
-            );
-          }
-          // Use sprite sheet animation when available, fall back to static SVG
-          const blipSprite = getSpriteData("blip");
-          if (blipSprite) {
-            iconWidget = new SpriteIconWidget(blipSprite, "blip");
-          } else {
-            iconWidget = new IconWidget("blip");
-          }
-          itemDecorations.push(
-            Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
-          );
-          break;
-        }
-        case "boom": {
-          ttl = RidiculousViewPlugin.TRAIL_BOOM_MS;
-          if (effect.charLabel && this.settings.chars) {
-            const color = RidiculousViewPlugin.randomGodotColor();
-            const widget = new FloatingLabelWidget(effect.charLabel, color, this.getEditorFontSizePx(), ttl);
-            itemDecorations.push(
-              Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
-            );
-          }
-          const boomSprite = getSpriteData("boom");
-          if (boomSprite) {
-            iconWidget = new SpriteIconWidget(boomSprite, "boom");
-          } else {
-            iconWidget = new IconWidget("boom");
-          }
-          itemDecorations.push(
-            Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
-          );
-          break;
-        }
-        case "newline": {
-          ttl = RidiculousViewPlugin.TRAIL_NEWLINE_MS;
-          const newlineSprite = getSpriteData("newline");
-          if (newlineSprite) {
-            iconWidget = new SpriteIconWidget(newlineSprite, "newline");
-          } else {
-            iconWidget = new IconWidget("newline");
-          }
-          itemDecorations.push(
-            Decoration.widget({ widget: iconWidget, side: -1 }).range(pos, pos)
-          );
-          break;
-        }
-      }
-
-      const id = this.nextId++;
-      this.activeItems.push({
-        id,
-        type: effect.type,
-        decorations: itemDecorations,
-        iconWidget,
-        ttl,
-        createdAt: Date.now(),
-      });
-    }
-
-    // Enforce MAX_TRAIL per type
-    for (const type of typesTriggered) {
-      const typeItems = this.activeItems.filter(item => item.type === type);
-      if (typeItems.length > RidiculousViewPlugin.MAX_TRAIL) {
-        const excess = typeItems.length - RidiculousViewPlugin.MAX_TRAIL;
-        const toRemove = typeItems.slice(0, excess);
-        this.activeItems = this.activeItems.filter(item => {
-          if (item.type !== type) return true;
-          return !toRemove.some(r => r.id === item.id);
-        });
-      }
-    }
-
-    this.rebuildDecorations();
-    this.pendingEffects = [];
-
-    // Start/continue per-type animation loops
-    for (const type of typesTriggered) {
-      this.ensureAnimating(type);
-    }
-  }
-
-  // ── Per-type continuous frame animation loop ──
-
-  private ensureAnimating(type: string): void {
-    if (this.animTimers.has(type)) return;
-
-    const tick = () => {
-      const items = this.activeItems.filter(item => item.type === type);
-
-      if (items.length === 0) {
-        const timer = this.animTimers.get(type);
-        if (timer) {
-          window.clearTimeout(timer);
-          this.animTimers.delete(type);
-        }
-        return;
-      }
-
-      const now = Date.now();
-      const floatEm = RidiculousViewPlugin.TRAIL_FLOAT_EM;
-      const scaleAdd = RidiculousViewPlugin.TRAIL_SCALE_ADD;
-      const aliveIds = new Set<number>();
-
-      for (const item of items) {
-        const age = now - item.createdAt;
-        const progress = Math.max(0, Math.min(1, age / item.ttl));
-
-        if (progress >= 1) continue; // expired — remove below
-
-        aliveIds.add(item.id);
-
-        const y = -(1.1 + floatEm * progress);
-        const s = 1.6 + scaleAdd * progress;
-
-        // Update IconWidget transform (FloatingLabelWidget handles its own)
-        if (item.iconWidget) {
-          item.iconWidget.setTransform(y, s);
-        }
-      }
-
-      // Remove expired items
-      if (aliveIds.size !== items.length) {
-        this.activeItems = this.activeItems.filter(item => {
-          if (item.type !== type) return true;
-          return aliveIds.has(item.id);
-        });
-        this.rebuildDecorations();
-      }
-
-      this.animTimers.set(type, window.setTimeout(tick, RidiculousViewPlugin.TRAIL_FRAME_MS));
-    };
-
-    this.animTimers.set(type, window.setTimeout(tick, RidiculousViewPlugin.TRAIL_FRAME_MS));
-  }
-
-  // ── Screen Shake ──
-
-  triggerShake(extendMs: number): void {
-    if (!this.settings.shake) return;
-
-    const now = Date.now();
-    const maxEnd = now + RATE_LIMITS.MAX_SHAKE_TOTAL_MS;
-    this.shakeEndAt = Math.min(
-      Math.max(this.shakeEndAt, now + Math.max(extendMs, this.settings.shakeDecayMs)),
-      maxEnd
-    );
-
-    if (!this.shakeDOM) {
-      this.shakeDOM = this.view.scrollDOM;
-    }
-
-    if (this.shakeTimerId === null) {
-      this.startShakeLoop();
-    }
-  }
-
-  private startShakeLoop(): void {
-    const tick = () => {
-      const now = Date.now();
-      if (now >= this.shakeEndAt) {
-        this.shakeTimerId = null;
-        if (this.shakeDOM) {
-          this.shakeDOM.setCssProps({ transform: "" });
-        }
-        return;
-      }
-
-      const amplitude = this.settings.shakeAmplitude;
-      const angle = Math.random() * Math.PI * 2;
-      const dx = Math.round(Math.cos(angle) * amplitude);
-      const dy = Math.round(Math.sin(angle) * amplitude);
-
-      if (this.shakeDOM) {
-        this.shakeDOM.setCssProps({
-          transform: `translate(${dx}px, ${dy}px)`,
-          transition: "transform 0.03s linear",
-        });
-      }
-
-      this.shakeTimerId = window.setTimeout(tick, RATE_LIMITS.SHAKE_FRAME_MS);
-    };
-
-    tick();
-  }
-
-  private sanitizeLabel(ch: string): string {
-    if (ch === "\n") return "";
-    if (ch === "\t") return "\u21B9";
-    if (ch.trim() === "") return "SPACE";
-    return ch;
-  }
-
-  clearDecorations(): void {
-    for (const [, timer] of this.animTimers) {
-      window.clearTimeout(timer);
-    }
-    this.animTimers.clear();
-    this.activeItems = [];
-    this.decorations = Decoration.none;
-    this.pendingEffects = [];
-    if (this.animFrameId !== null) {
-      window.cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = null;
-    }
-    if (this.shakeTimerId !== null) {
-      window.clearTimeout(this.shakeTimerId);
-      this.shakeTimerId = null;
-    }
-    if (this.shakeDOM) {
-      this.shakeDOM.setCssProps({ transform: "" });
-    }
-  }
-
   destroy(): void {
-    this.clearDecorations();
-  }
-}
-
-// ── Module-level instance reference for external cleanup ──
-
-const activeInstances = new Set<RidiculousViewPlugin>();
-
-export function clearActiveDecorations(): void {
-  for (const inst of activeInstances) {
-    inst.clearDecorations();
+    this.stopShake();
+    activeInstances.delete(this);
   }
 }
 
 // ── Factory function ──
 
 export function createRidiculousPlugin(settings: Settings) {
-  class RidiculousPluginAdapter extends RidiculousViewPlugin {
-    constructor(view: EditorView) {
-      super(view, settings);
-      activeInstances.add(this);
+  return ViewPlugin.fromClass(
+    class extends RidiculousViewPluginClass {
+      constructor(view: EditorView) {
+        super(view, settings);
+      }
+    },
+    {
+      decorations: () => Decoration.none,
     }
-    destroy(): void {
-      super.destroy();
-      activeInstances.delete(this);
-    }
-  }
-  return ViewPlugin.fromClass(RidiculousPluginAdapter, {
-    decorations: (p: RidiculousPluginAdapter) => p.decorations,
-  });
+  );
 }

@@ -58,42 +58,6 @@
   src: url(media/font/GravityBold8.ttf) format("truetype");
 }
 
-/* ── EffectManager: Widget containers ── */
-
-.rc-widget-container {
-  display: inline-block;
-  width: 1px;
-  height: 1em;
-  vertical-align: text-bottom;
-  overflow: visible;
-}
-
-/* Floating character label */
-.rc-label {
-  display: inline-block;
-  margin-top: -2.2em;
-  margin-left: -0.3em;
-  font-weight: bold;
-  font-family: "GravityBold8", "Cascadia Code", "Consolas", monospace;
-  pointer-events: none;
-  transform: translateY(-1.1em) scale(1.6);
-  transform-origin: left bottom;
-  white-space: nowrap;
-}
-
-/* Icon decoration */
-.rc-icon {
-  display: inline-block;
-  margin-top: -1.5em;
-  pointer-events: none;
-  vertical-align: middle;
-}
-
-.rc-sprite-icon {
-  position: relative;
-  z-index: 1;
-}
-
 /* Fireworks overlay */
 .ridiculous-coding-fireworks {
   position: fixed;
