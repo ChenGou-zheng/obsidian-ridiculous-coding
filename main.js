@@ -577,8 +577,18 @@ var RidiculousViewPluginClass = class {
     return ch;
   }
   // ── DOM Overlay: Floating Label ──
+  getCoordsAtOrNear(pos) {
+    const len = this.view.state.doc.length;
+    let coords = this.view.coordsAtPos(Math.min(pos, len));
+    if (coords)
+      return coords;
+    coords = this.view.coordsAtPos(Math.min(len, Math.max(0, pos - 1)));
+    if (coords)
+      return coords;
+    return null;
+  }
   showFloatingLabel(pos, text, color, ttl) {
-    const coords = this.view.coordsAtPos(pos);
+    const coords = this.getCoordsAtOrNear(pos);
     if (!coords)
       return;
     const label = document.createElement("span");
@@ -620,7 +630,7 @@ var RidiculousViewPluginClass = class {
   }
   // ── DOM Overlay: Sprite Animation ──
   playSpriteAnim(kind, pos) {
-    const coords = this.view.coordsAtPos(pos);
+    const coords = this.getCoordsAtOrNear(pos);
     if (!coords)
       return;
     const data = getSpriteData(kind);
@@ -737,9 +747,9 @@ var RidiculousViewPluginClass = class {
       if (text.includes("\n")) {
         this.playSpriteAnim("newline", pos);
       }
-      if (this.settings.chars) {
-        const charLabel = this.sanitizeLabel(text[0]);
-        const color = RidiculousViewPluginClass.randomGodotColor();
+      const charLabel = this.settings.chars ? this.sanitizeLabel(text[0]) : void 0;
+      const color = RidiculousViewPluginClass.randomGodotColor();
+      if (charLabel) {
         this.showFloatingLabel(pos, charLabel, color, TRAIL_BLIP_MS);
       }
       this.playSpriteAnim("blip", pos);
