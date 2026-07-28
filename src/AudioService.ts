@@ -1,4 +1,4 @@
-import { App, requestUrl } from "obsidian";
+import { App } from "obsidian";
 import { SoundEvent } from "./types";
 import { PLUGIN_ID } from "./constants";
 
@@ -29,8 +29,8 @@ export class AudioService {
     try {
       const vaultPath = `.obsidian/plugins/${PLUGIN_ID}/${relativePath}`;
       const resourceUrl = this.app.vault.adapter.getResourcePath(vaultPath);
-      const response = await requestUrl({ url: resourceUrl });
-      const arrayBuffer = response.arrayBuffer;
+      const response = await fetch(resourceUrl);
+      const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
       this.buffers.set(name, audioBuffer);
     } catch (e) {

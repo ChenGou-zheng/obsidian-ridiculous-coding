@@ -46,12 +46,12 @@ export async function loadSpriteData(app: App, kind: string): Promise<void> {
   );
 
   const [tscnResp, pngResp] = await Promise.all([
-    requestUrl({ url: tscnPath }),
-    requestUrl({ url: pngPath }),
+    fetch(tscnPath).then(r => r.text()),
+    fetch(pngPath).then(r => r.arrayBuffer()),
   ]);
 
-  const tscnText = tscnResp.text;
-  const pngBytes = new Uint8Array(pngResp.arrayBuffer);
+  const tscnText = tscnResp;
+  const pngBytes = new Uint8Array(pngResp);
   let binary = '';
   for (let i = 0; i < pngBytes.length; i++) {
     binary += String.fromCharCode(pngBytes[i]);
@@ -359,25 +359,25 @@ class RidiculousViewPluginClass {
     if (now - this.lastBlipTime < RATE_LIMITS.BLIP_MS) return;
     this.lastBlipTime = now;
 
-    if (this.settings.blips) {
-      // Newline effect
-      if (text.includes("\n")) {
-        this.playSpriteAnim("newline", pos);
-      }
-
-      // Blip floating label — always show (chars setting controls whether char text appears)
-      const charLabel = this.settings.chars ? this.sanitizeLabel(text[0]) : undefined;
-      const color = RidiculousViewPluginClass.randomGodotColor();
-      if (charLabel) {
-        this.showFloatingLabel(pos, charLabel, color, TRAIL_BLIP_MS);
-      }
-
-      // Blip sprite animation
-      this.playSpriteAnim("blip", pos);
-    }
-
     if (this.settings.shake) {
       this.triggerShake(text.includes("\n") ? 140 : 120);
+    }
+
+    if (this.settings.blips) {
+      const charLabel = this.settings.chars ? this.sanitizeLabel(text[0]) : undefined;
+      const color = RidiculousViewPluginClass.randomGodotColor();
+      const isNewline = text.includes("\n");
+
+      // Must defer: coordsAtPos reads layout, not allowed during CM6 update phase
+      window.requestAnimationFrame(() => {
+        if (isNewline) {
+          this.playSpriteAnim("newline", pos);
+        }
+        if (charLabel) {
+          this.showFloatingLabel(pos, charLabel, color, TRAIL_BLIP_MS);
+        }
+        this.playSpriteAnim("blip", pos);
+      });
     }
   }
 
@@ -386,19 +386,20 @@ class RidiculousViewPluginClass {
     if (now - this.lastBoomTime < RATE_LIMITS.BOOM_MS) return;
     this.lastBoomTime = now;
 
-    if (this.settings.explosions) {
-      // Boom floating label
-      if (this.settings.chars) {
-        const color = RidiculousViewPluginClass.randomGodotColor();
-        this.showFloatingLabel(pos, "BACKSPACE", color, TRAIL_BOOM_MS);
-      }
-
-      // Boom sprite
-      this.playSpriteAnim("boom", pos);
-    }
-
     if (this.settings.shake) {
       this.triggerShake(180);
+    }
+
+    if (this.settings.explosions) {
+      const charLabel = this.settings.chars ? "BACKSPACE" : undefined;
+      const color = RidiculousViewPluginClass.randomGodotColor();
+
+      window.requestAnimationFrame(() => {
+        if (charLabel) {
+          this.showFloatingLabel(pos, charLabel, color, TRAIL_BOOM_MS);
+        }
+        this.playSpriteAnim("boom", pos);
+      });
     }
   }
 

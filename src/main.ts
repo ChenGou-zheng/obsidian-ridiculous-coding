@@ -40,8 +40,9 @@ export default class RidiculousCodingPlugin extends Plugin {
       const fontPath = this.app.vault.adapter.getResourcePath(
         `.obsidian/plugins/${PLUGIN_ID}/media/font/GravityBold8.ttf`
       );
-      const resp = await requestUrl({ url: fontPath });
-      const bytes = new Uint8Array(resp.arrayBuffer);
+      const resp = await fetch(fontPath);
+      const buf = await resp.arrayBuffer();
+      const bytes = new Uint8Array(buf);
       let binary = '';
       for (let i = 0; i < bytes.length; i++) {
         binary += String.fromCharCode(bytes[i]);
@@ -82,22 +83,26 @@ export default class RidiculousCodingPlugin extends Plugin {
     // Settings tab
     this.addSettingTab(new RidiculousCodingSettingTab(this.app, this, this.xpService));
 
-    // Register panel view
-    this.registerView(PANEL_VIEW_TYPE, (leaf) =>
-      new RidiculousCodingPanel(
-        leaf,
-        this.xpService,
-        this.settings,
-        (key, value) => {
-          (this.settings as Record<string, any>)[key] = value;
-          void this.saveSettings();
-        },
-        () => {
-          this.xpService.reset();
-          this.updateStatusBar();
-        }
-      )
-    );
+    // Register panel view — guard against duplicate registration on reload
+    try {
+      this.registerView(PANEL_VIEW_TYPE, (leaf) =>
+        new RidiculousCodingPanel(
+          leaf,
+          this.xpService,
+          this.settings,
+          (key, value) => {
+            (this.settings as Record<string, any>)[key] = value;
+            void this.saveSettings();
+          },
+          () => {
+            this.xpService.reset();
+            this.updateStatusBar();
+          }
+        )
+      );
+    } catch {
+      // View type already registered from previous load — harmless
+    }
 
     // Commands
     this.addCommand({
@@ -209,7 +214,7 @@ export default class RidiculousCodingPlugin extends Plugin {
 
   onunload() {
     this.clearAllDecorations();
-    this.audioService.dispose();
-    this.fireworks.dispose();
+    this.audioService?.dispose();
+    this.fireworks?.dispose();
   }
 }

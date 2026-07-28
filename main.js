@@ -26,7 +26,7 @@ __export(main_exports, {
   default: () => RidiculousCodingPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/constants.ts
 var DEFAULT_SETTINGS = {
@@ -112,7 +112,6 @@ var XPService = class {
 };
 
 // src/AudioService.ts
-var import_obsidian = require("obsidian");
 var AudioService = class {
   constructor(app) {
     this.audioContext = null;
@@ -137,8 +136,8 @@ var AudioService = class {
     try {
       const vaultPath = `.obsidian/plugins/${PLUGIN_ID}/${relativePath}`;
       const resourceUrl = this.app.vault.adapter.getResourcePath(vaultPath);
-      const response = await (0, import_obsidian.requestUrl)({ url: resourceUrl });
-      const arrayBuffer = response.arrayBuffer;
+      const response = await fetch(resourceUrl);
+      const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
       this.buffers.set(name, audioBuffer);
     } catch (e) {
@@ -187,8 +186,8 @@ var AudioService = class {
 };
 
 // src/SettingsTab.ts
-var import_obsidian2 = require("obsidian");
-var RidiculousCodingSettingTab = class extends import_obsidian2.PluginSettingTab {
+var import_obsidian = require("obsidian");
+var RidiculousCodingSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin, xpService) {
     super(app, plugin);
     this.plugin = plugin;
@@ -200,68 +199,68 @@ var RidiculousCodingSettingTab = class extends import_obsidian2.PluginSettingTab
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("Blip effects").setDesc("Show animations when typing characters").addToggle(
+    new import_obsidian.Setting(containerEl).setName("Blip effects").setDesc("Show animations when typing characters").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.blips).onChange(async (value) => {
         this.plugin.settings.blips = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Explosion effects").setDesc("Show boom effects when deleting").addToggle(
+    new import_obsidian.Setting(containerEl).setName("Explosion effects").setDesc("Show boom effects when deleting").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.explosions).onChange(async (value) => {
         this.plugin.settings.explosions = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Character labels").setDesc("Overlay the typed character label with effects").addToggle(
+    new import_obsidian.Setting(containerEl).setName("Character labels").setDesc("Overlay the typed character label with effects").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.chars).onChange(async (value) => {
         this.plugin.settings.chars = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Screen shake").setDesc("Enable screen shake effects").addToggle(
+    new import_obsidian.Setting(containerEl).setName("Screen shake").setDesc("Enable screen shake effects").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.shake).onChange(async (value) => {
         this.plugin.settings.shake = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Shake amplitude").setDesc("Maximum shake displacement in pixels (0-32)").addSlider(
+    new import_obsidian.Setting(containerEl).setName("Shake amplitude").setDesc("Maximum shake displacement in pixels (0-32)").addSlider(
       (slider) => slider.setLimits(0, 32, 1).setValue(this.plugin.settings.shakeAmplitude).onChange(async (value) => {
         this.plugin.settings.shakeAmplitude = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Shake decay (ms)").setDesc("Minimum shake duration in milliseconds (20-2000)").addSlider(
+    new import_obsidian.Setting(containerEl).setName("Shake decay (ms)").setDesc("Minimum shake duration in milliseconds (20-2000)").addSlider(
       (slider) => slider.setLimits(20, 2e3, 20).setValue(this.plugin.settings.shakeDecayMs).onChange(async (value) => {
         this.plugin.settings.shakeDecayMs = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Sound effects").setDesc("Play sounds for blips, booms, and fireworks").addToggle(
+    new import_obsidian.Setting(containerEl).setName("Sound effects").setDesc("Play sounds for blips, booms, and fireworks").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.sound).onChange(async (value) => {
         this.plugin.settings.sound = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Fireworks").setDesc("Celebrate level-ups with fireworks animation").addToggle(
+    new import_obsidian.Setting(containerEl).setName("Fireworks").setDesc("Celebrate level-ups with fireworks animation").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.fireworks).onChange(async (value) => {
         this.plugin.settings.fireworks = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Base XP").setDesc("Base XP value used in level-up curve (10-200)").addSlider(
+    new import_obsidian.Setting(containerEl).setName("Base XP").setDesc("Base XP value used in level-up curve (10-200)").addSlider(
       (slider) => slider.setLimits(10, 200, 5).setValue(this.plugin.settings.baseXp).onChange(async (value) => {
         this.plugin.settings.baseXp = value;
         this.xpService.setBaseXp(value);
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Status bar").setDesc("Show level and XP progress in the status bar").addToggle(
+    new import_obsidian.Setting(containerEl).setName("Status bar").setDesc("Show level and XP progress in the status bar").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.enableStatusBar).onChange(async (value) => {
         this.plugin.settings.enableStatusBar = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Reduced effects mode").setDesc("Disable all visual effects and sounds for accessibility. XP system still works.").addToggle(
+    new import_obsidian.Setting(containerEl).setName("Reduced effects mode").setDesc("Disable all visual effects and sounds for accessibility. XP system still works.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.reducedEffects).onChange(async (value) => {
         this.plugin.settings.reducedEffects = value;
         await this.plugin.saveSettings();
@@ -271,7 +270,7 @@ var RidiculousCodingSettingTab = class extends import_obsidian2.PluginSettingTab
       })
     );
     containerEl.createEl("hr");
-    new import_obsidian2.Setting(containerEl).setName("Reset XP").setDesc("Reset your experience points and level back to 1").addButton(
+    new import_obsidian.Setting(containerEl).setName("Reset XP").setDesc("Reset your experience points and level back to 1").addButton(
       (button) => button.setButtonText("Reset").setWarning().onClick(() => {
         this.xpService.reset();
         this.plugin.updateStatusBar();
@@ -283,8 +282,8 @@ var RidiculousCodingSettingTab = class extends import_obsidian2.PluginSettingTab
 };
 
 // src/ControlPanel.ts
-var import_obsidian3 = require("obsidian");
-var RidiculousCodingPanel = class extends import_obsidian3.ItemView {
+var import_obsidian2 = require("obsidian");
+var RidiculousCodingPanel = class extends import_obsidian2.ItemView {
   constructor(leaf, xpService, settings, onToggle, onResetXp) {
     super(leaf);
     this.xpService = xpService;
@@ -447,7 +446,6 @@ var Fireworks = class {
 
 // src/EffectManager.ts
 var import_view = require("@codemirror/view");
-var import_obsidian4 = require("obsidian");
 var lastEditWasDelete = false;
 function wasLastEditDelete() {
   return lastEditWasDelete;
@@ -467,11 +465,11 @@ async function loadSpriteData(app, kind) {
     `.obsidian/plugins/${PLUGIN_ID}/media/animations/${kind}.png`
   );
   const [tscnResp, pngResp] = await Promise.all([
-    (0, import_obsidian4.requestUrl)({ url: tscnPath }),
-    (0, import_obsidian4.requestUrl)({ url: pngPath })
+    fetch(tscnPath).then((r) => r.text()),
+    fetch(pngPath).then((r) => r.arrayBuffer())
   ]);
-  const tscnText = tscnResp.text;
-  const pngBytes = new Uint8Array(pngResp.arrayBuffer);
+  const tscnText = tscnResp;
+  const pngBytes = new Uint8Array(pngResp);
   let binary = "";
   for (let i = 0; i < pngBytes.length; i++) {
     binary += String.fromCharCode(pngBytes[i]);
@@ -743,19 +741,22 @@ var RidiculousViewPluginClass = class {
     if (now - this.lastBlipTime < RATE_LIMITS.BLIP_MS)
       return;
     this.lastBlipTime = now;
-    if (this.settings.blips) {
-      if (text.includes("\n")) {
-        this.playSpriteAnim("newline", pos);
-      }
-      const charLabel = this.settings.chars ? this.sanitizeLabel(text[0]) : void 0;
-      const color = RidiculousViewPluginClass.randomGodotColor();
-      if (charLabel) {
-        this.showFloatingLabel(pos, charLabel, color, TRAIL_BLIP_MS);
-      }
-      this.playSpriteAnim("blip", pos);
-    }
     if (this.settings.shake) {
       this.triggerShake(text.includes("\n") ? 140 : 120);
+    }
+    if (this.settings.blips) {
+      const charLabel = this.settings.chars ? this.sanitizeLabel(text[0]) : void 0;
+      const color = RidiculousViewPluginClass.randomGodotColor();
+      const isNewline = text.includes("\n");
+      window.requestAnimationFrame(() => {
+        if (isNewline) {
+          this.playSpriteAnim("newline", pos);
+        }
+        if (charLabel) {
+          this.showFloatingLabel(pos, charLabel, color, TRAIL_BLIP_MS);
+        }
+        this.playSpriteAnim("blip", pos);
+      });
     }
   }
   handleDelete(pos) {
@@ -763,15 +764,18 @@ var RidiculousViewPluginClass = class {
     if (now - this.lastBoomTime < RATE_LIMITS.BOOM_MS)
       return;
     this.lastBoomTime = now;
-    if (this.settings.explosions) {
-      if (this.settings.chars) {
-        const color = RidiculousViewPluginClass.randomGodotColor();
-        this.showFloatingLabel(pos, "BACKSPACE", color, TRAIL_BOOM_MS);
-      }
-      this.playSpriteAnim("boom", pos);
-    }
     if (this.settings.shake) {
       this.triggerShake(180);
+    }
+    if (this.settings.explosions) {
+      const charLabel = this.settings.chars ? "BACKSPACE" : void 0;
+      const color = RidiculousViewPluginClass.randomGodotColor();
+      window.requestAnimationFrame(() => {
+        if (charLabel) {
+          this.showFloatingLabel(pos, charLabel, color, TRAIL_BOOM_MS);
+        }
+        this.playSpriteAnim("boom", pos);
+      });
     }
   }
   destroy() {
@@ -793,7 +797,7 @@ function createRidiculousPlugin(settings) {
 }
 
 // src/main.ts
-var _RidiculousCodingPlugin = class extends import_obsidian5.Plugin {
+var _RidiculousCodingPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
     this.statusBarItem = null;
@@ -816,8 +820,9 @@ var _RidiculousCodingPlugin = class extends import_obsidian5.Plugin {
         const fontPath = this.app.vault.adapter.getResourcePath(
           `.obsidian/plugins/${PLUGIN_ID}/media/font/GravityBold8.ttf`
         );
-        const resp = await (0, import_obsidian5.requestUrl)({ url: fontPath });
-        const bytes = new Uint8Array(resp.arrayBuffer);
+        const resp = await fetch(fontPath);
+        const buf = await resp.arrayBuffer();
+        const bytes = new Uint8Array(buf);
         let binary = "";
         for (let i = 0; i < bytes.length; i++) {
           binary += String.fromCharCode(bytes[i]);
@@ -845,22 +850,25 @@ var _RidiculousCodingPlugin = class extends import_obsidian5.Plugin {
       this.updateStatusBar();
       this.addRibbonIcon("rocket", "Ridiculous Coding", () => this.activatePanel());
       this.addSettingTab(new RidiculousCodingSettingTab(this.app, this, this.xpService));
-      this.registerView(
-        PANEL_VIEW_TYPE,
-        (leaf) => new RidiculousCodingPanel(
-          leaf,
-          this.xpService,
-          this.settings,
-          (key, value) => {
-            this.settings[key] = value;
-            void this.saveSettings();
-          },
-          () => {
-            this.xpService.reset();
-            this.updateStatusBar();
-          }
-        )
-      );
+      try {
+        this.registerView(
+          PANEL_VIEW_TYPE,
+          (leaf) => new RidiculousCodingPanel(
+            leaf,
+            this.xpService,
+            this.settings,
+            (key, value) => {
+              this.settings[key] = value;
+              void this.saveSettings();
+            },
+            () => {
+              this.xpService.reset();
+              this.updateStatusBar();
+            }
+          )
+        );
+      } catch (e) {
+      }
       this.addCommand({
         id: "show-panel",
         name: "Show Panel",
@@ -955,9 +963,10 @@ var _RidiculousCodingPlugin = class extends import_obsidian5.Plugin {
     this.oldReducedEffects = this.settings.reducedEffects;
   }
   onunload() {
+    var _a, _b;
     this.clearAllDecorations();
-    this.audioService.dispose();
-    this.fireworks.dispose();
+    (_a = this.audioService) == null ? void 0 : _a.dispose();
+    (_b = this.fireworks) == null ? void 0 : _b.dispose();
   }
 };
 var RidiculousCodingPlugin = _RidiculousCodingPlugin;
