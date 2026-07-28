@@ -24,6 +24,7 @@ export default class RidiculousCodingPlugin extends Plugin {
   }
 
   async onload() {
+    try {
     await this.loadSettings();
 
     // Initialize services
@@ -116,6 +117,9 @@ export default class RidiculousCodingPlugin extends Plugin {
     });
     
     this.oldReducedEffects = this.settings.reducedEffects;
+    } catch (e) {
+      console.error("Ridiculous Coding: plugin load failed", e);
+    }
   }
 
   private registerCodeMirrorPlugin(): void {

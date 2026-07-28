@@ -10,7 +10,7 @@ import { App, requestUrl } from "obsidian";
 import { PLUGIN_ID, RATE_LIMITS } from "./constants";
 import { Settings } from "./types";
 
-// ── Module-level: last edit type for audio selection ──
+// ── Module-level: last edit type for audio selection ──// ── Module-level: last edit type for audio selection ──
 
 let lastEditWasDelete = false;
 export function wasLastEditDelete(): boolean { return lastEditWasDelete; }

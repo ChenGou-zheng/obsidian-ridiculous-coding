@@ -806,76 +806,80 @@ var _RidiculousCodingPlugin = class extends import_obsidian5.Plugin {
     return (_b = (_a = this.app.workspace.getLeavesOfType(PANEL_VIEW_TYPE)[0]) == null ? void 0 : _a.view) != null ? _b : null;
   }
   async onload() {
-    await this.loadSettings();
-    this.xpService = new XPService(this, this.settings.baseXp);
-    this.audioService = new AudioService(this.app);
-    this.fireworks = new Fireworks();
-    await this.audioService.configure();
     try {
-      const fontPath = this.app.vault.adapter.getResourcePath(
-        `.obsidian/plugins/${PLUGIN_ID}/media/font/GravityBold8.ttf`
-      );
-      const resp = await (0, import_obsidian5.requestUrl)({ url: fontPath });
-      const bytes = new Uint8Array(resp.arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
+      await this.loadSettings();
+      this.xpService = new XPService(this, this.settings.baseXp);
+      this.audioService = new AudioService(this.app);
+      this.fireworks = new Fireworks();
+      await this.audioService.configure();
+      try {
+        const fontPath = this.app.vault.adapter.getResourcePath(
+          `.obsidian/plugins/${PLUGIN_ID}/media/font/GravityBold8.ttf`
+        );
+        const resp = await (0, import_obsidian5.requestUrl)({ url: fontPath });
+        const bytes = new Uint8Array(resp.arrayBuffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        setFontBase64(btoa(binary));
+      } catch (e) {
+        console.warn("Ridiculous Coding: Failed to load font, falling back to monospace");
       }
-      setFontBase64(btoa(binary));
-    } catch (e) {
-      console.warn("Ridiculous Coding: Failed to load font, falling back to monospace");
-    }
-    try {
-      await Promise.all([
-        loadSpriteData(this.app, "blip"),
-        loadSpriteData(this.app, "boom"),
-        loadSpriteData(this.app, "newline")
-      ]);
-    } catch (e) {
-      console.warn("Ridiculous Coding: Failed to load sprite data, falling back to static SVG icons", e);
-    }
-    this.registerCodeMirrorPlugin();
-    this.registerEditorEvents();
-    this.statusBarItem = this.addStatusBarItem();
-    this.statusBarItem.addClass(STATUS_BAR_CLASS);
-    this.statusBarItem.onclick = () => {
-      void this.activatePanel();
-    };
-    this.updateStatusBar();
-    this.addRibbonIcon("rocket", "Ridiculous Coding", () => this.activatePanel());
-    this.addSettingTab(new RidiculousCodingSettingTab(this.app, this, this.xpService));
-    this.registerView(
-      PANEL_VIEW_TYPE,
-      (leaf) => new RidiculousCodingPanel(
-        leaf,
-        this.xpService,
-        this.settings,
-        (key, value) => {
-          this.settings[key] = value;
-          void this.saveSettings();
-        },
-        () => {
+      try {
+        await Promise.all([
+          loadSpriteData(this.app, "blip"),
+          loadSpriteData(this.app, "boom"),
+          loadSpriteData(this.app, "newline")
+        ]);
+      } catch (e) {
+        console.warn("Ridiculous Coding: Failed to load sprite data, falling back to static SVG icons", e);
+      }
+      this.registerCodeMirrorPlugin();
+      this.registerEditorEvents();
+      this.statusBarItem = this.addStatusBarItem();
+      this.statusBarItem.addClass(STATUS_BAR_CLASS);
+      this.statusBarItem.onclick = () => {
+        void this.activatePanel();
+      };
+      this.updateStatusBar();
+      this.addRibbonIcon("rocket", "Ridiculous Coding", () => this.activatePanel());
+      this.addSettingTab(new RidiculousCodingSettingTab(this.app, this, this.xpService));
+      this.registerView(
+        PANEL_VIEW_TYPE,
+        (leaf) => new RidiculousCodingPanel(
+          leaf,
+          this.xpService,
+          this.settings,
+          (key, value) => {
+            this.settings[key] = value;
+            void this.saveSettings();
+          },
+          () => {
+            this.xpService.reset();
+            this.updateStatusBar();
+          }
+        )
+      );
+      this.addCommand({
+        id: "show-panel",
+        name: "Show Panel",
+        callback: () => this.activatePanel()
+      });
+      this.addCommand({
+        id: "reset-xp",
+        name: "Reset XP",
+        callback: () => {
+          var _a;
           this.xpService.reset();
           this.updateStatusBar();
+          (_a = this.getPanel()) == null ? void 0 : _a.refresh();
         }
-      )
-    );
-    this.addCommand({
-      id: "show-panel",
-      name: "Show Panel",
-      callback: () => this.activatePanel()
-    });
-    this.addCommand({
-      id: "reset-xp",
-      name: "Reset XP",
-      callback: () => {
-        var _a;
-        this.xpService.reset();
-        this.updateStatusBar();
-        (_a = this.getPanel()) == null ? void 0 : _a.refresh();
-      }
-    });
-    this.oldReducedEffects = this.settings.reducedEffects;
+      });
+      this.oldReducedEffects = this.settings.reducedEffects;
+    } catch (e) {
+      console.error("Ridiculous Coding: plugin load failed", e);
+    }
   }
   registerCodeMirrorPlugin() {
     const cmExtension = createRidiculousPlugin(this.settings);
