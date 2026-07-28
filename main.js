@@ -592,20 +592,13 @@ var RidiculousViewPluginClass = class {
     const label = document.createElement("span");
     label.className = "rc-overlay-label";
     label.textContent = text;
-    label.style.cssText = `
-      position: fixed;
-      left: ${coords.left}px;
-      top: ${coords.top}px;
-      color: ${color};
-      font-size: ${this.getEditorFontSizePx()}px;
-      font-family: "GravityBold8", "Cascadia Code", "Consolas", monospace;
-      font-weight: bold;
-      pointer-events: none;
-      z-index: 1000;
-      transform: translateY(-1.1em) scale(1.6);
-      transform-origin: left bottom;
-      white-space: nowrap;
-    `;
+    label.setCssProps({
+      left: `${coords.left}px`,
+      top: `${coords.top}px`,
+      color,
+      fontSize: `${this.getEditorFontSizePx()}px`,
+      transform: `translateY(-1.1em) scale(1.6)`
+    });
     document.body.appendChild(label);
     track(label);
     const createdAt = Date.now();
@@ -635,35 +628,12 @@ var RidiculousViewPluginClass = class {
     if (!data)
       return;
     const img = document.createElement("img");
-    img.className = "rc-overlay-sprite";
+    img.className = `rc-overlay-sprite rc-sprite-${kind}`;
     img.src = data.frameUris[0];
-    img.style.cssText = `
-      position: fixed;
-      left: ${coords.left}px;
-      top: ${coords.top}px;
-      pointer-events: none;
-      z-index: 1000;
-    `;
-    switch (kind) {
-      case "boom":
-        img.style.width = "32px";
-        img.style.height = "32px";
-        img.style.marginTop = "-16px";
-        img.style.marginLeft = "-16px";
-        break;
-      case "blip":
-        img.style.width = "18px";
-        img.style.height = "18px";
-        img.style.marginTop = "-9px";
-        img.style.marginLeft = "-9px";
-        break;
-      case "newline":
-        img.style.width = "14px";
-        img.style.height = "14px";
-        img.style.marginTop = "-7px";
-        img.style.marginLeft = "-7px";
-        break;
-    }
+    img.setCssProps({
+      left: `${coords.left}px`,
+      top: `${coords.top}px`
+    });
     document.body.appendChild(img);
     track(img);
     let frame = 0;
