@@ -453,11 +453,6 @@ function wasLastEditDelete() {
   return lastEditWasDelete;
 }
 var fontBase64 = null;
-function getFontBase64() {
-  if (fontBase64)
-    return fontBase64;
-  return "";
-}
 function setFontBase64(b64) {
   fontBase64 = b64;
 }
@@ -529,7 +524,7 @@ function getSpriteData(kind) {
 var FloatingLabelWidget = class extends import_view.WidgetType {
   constructor(text, color, fontSize, ttl) {
     super();
-    this.imgEl = null;
+    this.spanEl = null;
     this.animTimer = null;
     this.text = text;
     this.color = color;
@@ -538,30 +533,15 @@ var FloatingLabelWidget = class extends import_view.WidgetType {
     this.createdAt = Date.now();
   }
   toDOM(_view) {
-    const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
     const wrap = document.createElement("span");
     wrap.className = "rc-widget-container";
-    const fontData = getFontBase64();
-    const fontFamily = fontData ? "'GravityBold8', 'Cascadia Code', 'Consolas', monospace" : "'Cascadia Code', 'Consolas', monospace";
-    const fontFace = fontData ? `@font-face { font-family: 'GravityBold8'; src: url(data:font/ttf;base64,${fontData}) format('truetype'); font-weight: normal; font-style: normal; }` : "";
-    const paddingX = 2;
-    const paddingY = 1;
-    const baseline = this.fontSize + paddingY;
-    const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" height="${baseline + paddingY}">
-  <defs>
-    <style><![CDATA[
-      ${fontFace}
-      .t { font-family: ${fontFamily}; font-size: ${this.fontSize}px; fill: ${this.color}; }
-    ]]></style>
-  </defs>
-  <text class="t" x="${paddingX}" y="${baseline}">${esc(this.text)}</text>
-</svg>`;
-    const img = document.createElement("img");
-    img.className = "rc-label";
-    img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-    this.imgEl = img;
-    wrap.appendChild(img);
+    const label = document.createElement("span");
+    label.className = "rc-label";
+    label.textContent = this.text;
+    label.style.color = this.color;
+    label.style.fontSize = `${this.fontSize}px`;
+    this.spanEl = label;
+    wrap.appendChild(label);
     this.startAnimation();
     return wrap;
   }
@@ -569,14 +549,14 @@ var FloatingLabelWidget = class extends import_view.WidgetType {
     const floatEm = 0.7;
     const scaleAdd = 0.6;
     const tick = () => {
-      if (!this.imgEl)
+      if (!this.spanEl)
         return;
       const now = Date.now();
       const age = now - this.createdAt;
       const progress = Math.max(0, Math.min(1, age / this.ttl));
       const y = -(1.1 + floatEm * progress);
       const s = 1.6 + scaleAdd * progress;
-      this.imgEl.style.transform = `translateY(${y}em) scale(${s})`;
+      this.spanEl.style.transform = `translateY(${y}em) scale(${s})`;
       if (progress < 1) {
         this.animTimer = window.setTimeout(tick, 50);
       }
@@ -588,7 +568,7 @@ var FloatingLabelWidget = class extends import_view.WidgetType {
       window.clearTimeout(this.animTimer);
       this.animTimer = null;
     }
-    this.imgEl = null;
+    this.spanEl = null;
   }
 };
 var IconWidget = class extends import_view.WidgetType {

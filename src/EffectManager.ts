@@ -118,7 +118,7 @@ class FloatingLabelWidget extends WidgetType {
   private fontSize: number;
   private ttl: number;
   private createdAt: number;
-  private imgEl: HTMLImageElement | null = null;
+  private spanEl: HTMLSpanElement | null = null;
   private animTimer: number | null = null;
 
   constructor(text: string, color: string, fontSize: number, ttl: number) {
@@ -131,40 +131,17 @@ class FloatingLabelWidget extends WidgetType {
   }
 
   toDOM(_view: EditorView): HTMLElement {
-    const esc = (s: string) => s.replace(/[&<>"']/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
     const wrap = document.createElement("span");
     wrap.className = "rc-widget-container";
 
-    const fontData = getFontBase64();
-    const fontFamily = fontData
-      ? "'GravityBold8', 'Cascadia Code', 'Consolas', monospace"
-      : "'Cascadia Code', 'Consolas', monospace";
-    const fontFace = fontData
-      ? `@font-face { font-family: 'GravityBold8'; src: url(data:font/ttf;base64,${fontData}) format('truetype'); font-weight: normal; font-style: normal; }`
-      : "";
+    const label = document.createElement("span");
+    label.className = "rc-label";
+    label.textContent = this.text;
+    label.style.color = this.color;
+    label.style.fontSize = `${this.fontSize}px`;
 
-    const paddingX = 2;
-    const paddingY = 1;
-    const baseline = this.fontSize + paddingY;
-
-    const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" height="${baseline + paddingY}">
-  <defs>
-    <style><![CDATA[
-      ${fontFace}
-      .t { font-family: ${fontFamily}; font-size: ${this.fontSize}px; fill: ${this.color}; }
-    ]]></style>
-  </defs>
-  <text class="t" x="${paddingX}" y="${baseline}">${esc(this.text)}</text>
-</svg>`;
-
-    const img = document.createElement("img");
-    img.className = "rc-label";
-    img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-
-    this.imgEl = img;
-    wrap.appendChild(img);
+    this.spanEl = label;
+    wrap.appendChild(label);
 
     this.startAnimation();
 
@@ -176,13 +153,13 @@ class FloatingLabelWidget extends WidgetType {
     const scaleAdd = 0.6;
 
     const tick = () => {
-      if (!this.imgEl) return;
+      if (!this.spanEl) return;
       const now = Date.now();
       const age = now - this.createdAt;
       const progress = Math.max(0, Math.min(1, age / this.ttl));
       const y = -(1.1 + floatEm * progress);
       const s = 1.6 + scaleAdd * progress;
-      this.imgEl.style.transform = `translateY(${y}em) scale(${s})`;
+      this.spanEl.style.transform = `translateY(${y}em) scale(${s})`;
 
       if (progress < 1) {
         this.animTimer = window.setTimeout(tick, 50);
@@ -197,7 +174,7 @@ class FloatingLabelWidget extends WidgetType {
       window.clearTimeout(this.animTimer);
       this.animTimer = null;
     }
-    this.imgEl = null;
+    this.spanEl = null;
   }
 }
 
