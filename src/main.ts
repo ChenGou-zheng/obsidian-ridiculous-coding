@@ -6,7 +6,7 @@ import { AudioService } from "./AudioService";
 import { RidiculousCodingSettingTab } from "./SettingsTab";
 import { RidiculousCodingPanel } from "./ControlPanel";
 import { Fireworks } from "./Fireworks";
-import { createRidiculousPlugin, clearActiveDecorations, setFontBase64 } from "./EffectManager";
+import { createRidiculousPlugin, clearActiveDecorations, setFontBase64, loadSpriteData, wasLastEditDelete } from "./EffectManager";
 
 export default class RidiculousCodingPlugin extends Plugin {
   settings: Settings & { xp?: number; level?: number; xpNextAbs?: number; xpLevelStart?: number };
@@ -16,6 +16,7 @@ export default class RidiculousCodingPlugin extends Plugin {
   private statusBarItem: HTMLElement | null = null;
   private pitchIncrease = 0;
   private pitchResetTimer: number | null = null;
+  private oldReducedEffects = false;
   private static readonly PITCH_RESET_MS = 180;
 
   private getPanel(): RidiculousCodingPanel | null {
@@ -47,6 +48,17 @@ export default class RidiculousCodingPlugin extends Plugin {
       setFontBase64(btoa(binary));
     } catch {
       console.warn("Ridiculous Coding: Failed to load font, falling back to monospace");
+    }
+
+    // Load sprite sheet data for animated icons (blip/boom/newline)
+    try {
+      await Promise.all([
+        loadSpriteData(this.app, "blip"),
+        loadSpriteData(this.app, "boom"),
+        loadSpriteData(this.app, "newline"),
+      ]);
+    } catch (e) {
+      console.warn("Ridiculous Coding: Failed to load sprite data, falling back to static SVG icons", e);
     }
 
     // Register CodeMirror extension for decorations
@@ -102,6 +114,8 @@ export default class RidiculousCodingPlugin extends Plugin {
         this.getPanel()?.refresh();
       },
     });
+    
+    this.oldReducedEffects = this.settings.reducedEffects;
   }
 
   private registerCodeMirrorPlugin(): void {
@@ -128,7 +142,11 @@ export default class RidiculousCodingPlugin extends Plugin {
 
         // Play audio only if effects are enabled
         if (!this.settings.reducedEffects && this.settings.sound) {
-          this.audioService.play({ type: "blip", pitch });
+          if (wasLastEditDelete()) {
+            this.audioService.play({ type: "boom" });
+          } else {
+            this.audioService.play({ type: "blip", pitch });
+          }
         }
 
         // Trigger fireworks on level-up (visual + audio)
@@ -177,6 +195,12 @@ export default class RidiculousCodingPlugin extends Plugin {
     this.audioService.isEnabled = this.settings.sound;
     this.updateStatusBar();
     this.getPanel()?.refresh();
+
+    // Clear existing decorations when reduced effects is enabled
+    if (!this.oldReducedEffects && this.settings.reducedEffects) {
+      this.clearAllDecorations();
+    }
+    this.oldReducedEffects = this.settings.reducedEffects;
   }
 
   onunload() {

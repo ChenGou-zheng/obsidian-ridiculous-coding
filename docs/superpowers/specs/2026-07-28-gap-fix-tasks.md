@@ -258,6 +258,16 @@ const s = 1.6 + scaleAdd * progress;
 - 所有 decorations 清除后 animation loop 自动停止
 - Boom 使用 650ms TTL，newline 使用 350ms TTL
 
+### 验证结果
+
+✅ **已实现。验证方法：**
+1. 连续输入 5 个字符，可见 5 个 label 在各自 TTL 内独立浮起+放大
+2. 第 6 个字符出现时最早被移除（MAX_TRAIL=5）
+3. 快速连续输入时 `ensureAnimating` 循环维持图标帧更新
+4. 所有装饰清除后 animTimers 自动停止
+
+**修改文件：** `src/EffectManager.ts` — 新增 `ensureAnimating()`, `animTimers`, `MAX_TRAIL` 常量
+
 ---
 
 ## 任务 4: Icon 改用 Sprite Sheet 帧动画（替代硬编码 SVG）
@@ -443,6 +453,15 @@ const widget = new FloatingLabelWidget(effect.charLabel, color, 18, 400);
 - 在 Obsidian 设置中切换不同字号后 blip label 大小自适应
 - 默认字号（16px）下效果与当前硬编码 18px 视觉接近
 
+### 验证结果
+
+✅ **已实现。验证方法：**
+1. 从 `view.dom` 的 `fontSize` 样式动态读取当前编辑器字号
+2. 最小 8px，默认 fallback 14px
+3. 在 Obsidian 设置中切换字号后 blip label 大小自适应
+
+**修改文件：** `src/EffectManager.ts` — 新增 `getEditorFontSizePx()`，替换硬编码 18
+
 ---
 
 ## 任务 6: reducedEffects 切换时清除已有装饰
@@ -504,6 +523,15 @@ async saveSettings() {
 - 在 Settings/Control Panel 中勾选 "Reduced effects"
 - 现有 decorations 立即消失
 
+### 验证结果
+
+✅ **已实现。验证方法：**
+1. 打字产生 blip/boom decorations
+2. 在 Settings/Control Panel 中勾选 "Reduced effects"
+3. 现有 decorations 立即清除
+
+**修改文件：** `src/main.ts` — 新增 `oldReducedEffects` 字段，在 `saveSettings()` 和 `onload()` 中检测切换
+
 ---
 
 ## 任务 7: 删除时 Boom 音效 + 新行 Blip 音效
@@ -562,6 +590,15 @@ this.app.workspace.on("editor-change", (_editor: Editor, _info: unknown) => {
 
 - 按 Delete/Backspace 时播放 boom 音效（不是 blip）
 - 正常打字仍播放 blip 音效
+
+### 验证结果
+
+✅ **已实现。验证方法：**
+1. 按 Delete/Backspace 时播放 boom 音效
+2. 正常打字播放 blip 音效
+3. 通过 CM6 ViewPlugin 的 `update()` 中 `iterChanges()` 区分 insert/delete，设置 `lastEditWasDelete` 标志
+
+**修改文件：** `src/EffectManager.ts` — 新增 `lastEditWasDelete` 模块级标志 + `wasLastEditDelete()` 导出；`src/main.ts` — 导入并在 editor-change 回调中根据标志选择 blip/boom
 
 ---
 

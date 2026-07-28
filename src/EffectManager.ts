@@ -8,8 +8,14 @@ import {
 } from "@codemirror/view";
 
 import { Range } from "@codemirror/state";
-import { RATE_LIMITS } from "./constants";
+import { App, requestUrl } from "obsidian";
+import { PLUGIN_ID, RATE_LIMITS } from "./constants";
 import { Settings } from "./types";
+
+// ── Module-level: last edit type for audio selection (read by main.ts) ──
+
+let lastEditWasDelete = false;
+export function wasLastEditDelete(): boolean { return lastEditWasDelete; }
 
 // ── Font base64 (lazy-loaded by main.ts) ──
 
@@ -19,6 +25,90 @@ function getFontBase64(): string {
   return "";
 }
 export function setFontBase64(b64: string) { fontBase64 = b64; }
+
+// ── Sprite sheet data types & cache ──
+
+interface SpriteFrame { x: number; y: number; w: number; h: number; }
+interface SpriteData {
+  frames: SpriteFrame[];
+  sheetW: number;
+  sheetH: number;
+  fps: number;
+  frameMs: number;
+  pngBase64: string;
+  frameUris: string[];
+}
+
+const spriteDataCache = new Map<string, SpriteData>();
+
+export async function loadSpriteData(app: App, kind: string): Promise<void> {
+  if (spriteDataCache.has(kind)) return;
+
+  const tscnPath = app.vault.adapter.getResourcePath(
+    `.obsidian/plugins/${PLUGIN_ID}/media/animations/${kind}.tscn`
+  );
+  const pngPath = app.vault.adapter.getResourcePath(
+    `.obsidian/plugins/${PLUGIN_ID}/media/animations/${kind}.png`
+  );
+
+  const [tscnResp, pngResp] = await Promise.all([
+    requestUrl({ url: tscnPath }),
+    requestUrl({ url: pngPath }),
+  ]);
+
+  const tscnText = tscnResp.text;
+  const pngBytes = new Uint8Array(pngResp.arrayBuffer);
+  let binary = '';
+  for (let i = 0; i < pngBytes.length; i++) {
+    binary += String.fromCharCode(pngBytes[i]);
+  }
+  const pngB64 = btoa(binary);
+
+  // Parse AtlasTextures regions by id — exact same regex as VS Code reference
+  const atlasMap = new Map<string, SpriteFrame>();
+  const atlasBlocks = [...tscnText.matchAll(/\[sub_resource\s+type="AtlasTexture"\s+id="(.*?)"\][\s\S]*?region\s*=\s*Rect2\(([^\)]*)\)/g)];
+  for (const m of atlasBlocks) {
+    const id = m[1];
+    const nums = m[2].split(',').map(s => parseFloat(s.trim()));
+    if (nums.length >= 4) atlasMap.set(id, { x: nums[0], y: nums[1], w: nums[2], h: nums[3] });
+  }
+
+  // Parse SpriteFrames order and speed
+  const framesOrder: string[] = [];
+  const animBlock = tscnText.match(/\[sub_resource\s+type="SpriteFrames"[\s\S]*?animations\s*=\s*\[(\{[\s\S]*?\})\][\s\S]*?\n/);
+  if (animBlock) {
+    const block = animBlock[1];
+    const subResRefs = [...block.matchAll(/SubResource\("(.*?)"\)/g)];
+    for (const sr of subResRefs) framesOrder.push(sr[1]);
+  }
+  const speedMatch = tscnText.match(/"speed"\s*:\s*([0-9.]+)/);
+  const fps = speedMatch ? Math.max(1, parseFloat(speedMatch[1])) : 24;
+
+  const frames: SpriteFrame[] = [];
+  for (const id of framesOrder) {
+    const rect = atlasMap.get(id);
+    if (rect) frames.push(rect);
+  }
+  // Fallback: if order parsing failed, use atlas values in insertion order
+  if (!frames.length && atlasMap.size) frames.push(...[...atlasMap.values()]);
+
+  // Compute sheet dimensions from max extents
+  let sheetW = 0, sheetH = 0;
+  for (const f of frames) { sheetW = Math.max(sheetW, f.x + f.w); sheetH = Math.max(sheetH, f.y + f.h); }
+
+  // Prebuild frame SVG URIs — matches VS Code clip-to-region pattern
+  const frameMs = Math.max(10, Math.round(1000 / fps));
+  const frameUris: string[] = frames.map(f => {
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f.w} ${f.h}" width="${f.w}" height="${f.h}">\n  <image href="data:image/png;base64,${pngB64}" x="-${f.x}" y="-${f.y}" width="${sheetW}" height="${sheetH}" preserveAspectRatio="none"/>\n</svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  });
+
+  spriteDataCache.set(kind, { frames, sheetW, sheetH, fps, frameMs, pngBase64: pngB64, frameUris });
+}
+
+export function getSpriteData(kind: string): SpriteData | undefined {
+  return spriteDataCache.get(kind);
+}
 
 // ── Widget: Floating char label (blip/boom text) ──
 
@@ -160,6 +250,83 @@ class IconWidget extends WidgetType {
   }
 }
 
+// ── Widget: Sprite sheet animated icon (replaces static IconWidget SVG) ──
+
+class SpriteIconWidget extends WidgetType {
+  private spriteData: SpriteData;
+  private kind: string;
+  private currentFrame = 0;
+  private imgEl: HTMLImageElement | null = null;
+  private domEl: HTMLElement | null = null;
+  private frameTimer: number | null = null;
+
+  constructor(spriteData: SpriteData, kind: string) {
+    super();
+    this.spriteData = spriteData;
+    this.kind = kind;
+  }
+
+  toDOM(_view: EditorView): HTMLElement {
+    const wrap = document.createElement("span");
+    wrap.className = "rc-widget-container";
+
+    const img = document.createElement("img");
+    img.className = `rc-icon rc-icon-${this.kind} rc-sprite-icon`;
+    img.src = this.spriteData.frameUris[0];
+
+    // Size each kind to approximate the original Godot pixel-art proportions
+    switch (this.kind) {
+      case "blip":
+        img.style.width = "18px"; img.style.height = "18px";
+        break;
+      case "boom":
+        img.style.width = "32px"; img.style.height = "32px";
+        break;
+      case "newline":
+        img.style.width = "14px"; img.style.height = "14px";
+        break;
+    }
+
+    this.imgEl = img;
+    wrap.appendChild(img);
+    this.domEl = wrap;
+
+    this.startFrameAnim();
+    return wrap;
+  }
+
+  private startFrameAnim(): void {
+    const { frameMs } = this.spriteData;
+    const total = this.spriteData.frameUris.length;
+    if (total <= 1) return;
+
+    const tick = () => {
+      if (!this.imgEl || !this.domEl) return;
+      this.currentFrame++;
+      if (this.currentFrame >= total) return; // animation complete
+      this.imgEl.src = this.spriteData.frameUris[this.currentFrame];
+      this.frameTimer = window.setTimeout(tick, frameMs);
+    };
+
+    this.frameTimer = window.setTimeout(tick, frameMs);
+  }
+
+  setTransform(y: number, s: number): void {
+    if (this.domEl) {
+      this.domEl.style.transform = `translateY(${y}em) scale(${s})`;
+    }
+  }
+
+  destroy(_dom: HTMLElement): void {
+    if (this.frameTimer !== null) {
+      window.clearTimeout(this.frameTimer);
+      this.frameTimer = null;
+    }
+    this.imgEl = null;
+    this.domEl = null;
+  }
+}
+
 // ── ViewPlugin ──
 
 interface PendingEffect {
@@ -185,7 +352,7 @@ class RidiculousViewPlugin {
     id: number;
     type: string;
     decorations: Range<Decoration>[];
-    iconWidget: IconWidget | null;
+    iconWidget: IconWidget | SpriteIconWidget | null;
     ttl: number;
     createdAt: number;
   }> = [];
@@ -216,6 +383,17 @@ class RidiculousViewPlugin {
     this.settings = settings;
   }
 
+  private getEditorFontSizePx(): number {
+    try {
+      const cssFontSize = this.view.dom.style.fontSize ||
+        getComputedStyle(this.view.dom).fontSize;
+      const px = parseFloat(cssFontSize);
+      return Math.max(8, isNaN(px) ? 14 : px);
+    } catch {
+      return 14;
+    }
+  }
+
   update(update: ViewUpdate): void {
     if (!update.docChanged) return;
 
@@ -226,10 +404,12 @@ class RidiculousViewPlugin {
           const removedLength = toA - fromA;
 
           if (insertedText.length > 0 && !this.settings.reducedEffects) {
+            lastEditWasDelete = false;
             this.handleInsert(toB, insertedText);
           }
 
           if (removedLength > 0 && !this.settings.reducedEffects) {
+            lastEditWasDelete = true;
             this.handleDelete(fromA);
           }
         }
@@ -316,7 +496,7 @@ class RidiculousViewPlugin {
       typesTriggered.add(effect.type);
       const cursorPos = pos;
       const itemDecorations: Range<Decoration>[] = [];
-      let iconWidget: IconWidget | null = null;
+      let iconWidget: IconWidget | SpriteIconWidget | null = null;
       let ttl: number;
 
       switch (effect.type) {
@@ -324,12 +504,18 @@ class RidiculousViewPlugin {
           ttl = RidiculousViewPlugin.TRAIL_BLIP_MS;
           const color = RidiculousViewPlugin.randomGodotColor();
           if (effect.charLabel && this.settings.chars) {
-            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, ttl);
+            const widget = new FloatingLabelWidget(effect.charLabel, color, this.getEditorFontSizePx(), ttl);
             itemDecorations.push(
               Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
-          iconWidget = new IconWidget("blip");
+          // Use sprite sheet animation when available, fall back to static SVG
+          const blipSprite = getSpriteData("blip");
+          if (blipSprite) {
+            iconWidget = new SpriteIconWidget(blipSprite, "blip");
+          } else {
+            iconWidget = new IconWidget("blip");
+          }
           itemDecorations.push(
             Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
@@ -339,12 +525,17 @@ class RidiculousViewPlugin {
           ttl = RidiculousViewPlugin.TRAIL_BOOM_MS;
           if (effect.charLabel && this.settings.chars) {
             const color = RidiculousViewPlugin.randomGodotColor();
-            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, ttl);
+            const widget = new FloatingLabelWidget(effect.charLabel, color, this.getEditorFontSizePx(), ttl);
             itemDecorations.push(
               Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
-          iconWidget = new IconWidget("boom");
+          const boomSprite = getSpriteData("boom");
+          if (boomSprite) {
+            iconWidget = new SpriteIconWidget(boomSprite, "boom");
+          } else {
+            iconWidget = new IconWidget("boom");
+          }
           itemDecorations.push(
             Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
@@ -352,7 +543,12 @@ class RidiculousViewPlugin {
         }
         case "newline": {
           ttl = RidiculousViewPlugin.TRAIL_NEWLINE_MS;
-          iconWidget = new IconWidget("newline");
+          const newlineSprite = getSpriteData("newline");
+          if (newlineSprite) {
+            iconWidget = new SpriteIconWidget(newlineSprite, "newline");
+          } else {
+            iconWidget = new IconWidget("newline");
+          }
           itemDecorations.push(
             Decoration.widget({ widget: iconWidget, side: -1 }).range(pos, pos)
           );

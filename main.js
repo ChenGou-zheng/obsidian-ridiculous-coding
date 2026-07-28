@@ -26,7 +26,7 @@ __export(main_exports, {
   default: () => RidiculousCodingPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/constants.ts
 var DEFAULT_SETTINGS = {
@@ -447,6 +447,11 @@ var Fireworks = class {
 
 // src/EffectManager.ts
 var import_view = require("@codemirror/view");
+var import_obsidian4 = require("obsidian");
+var lastEditWasDelete = false;
+function wasLastEditDelete() {
+  return lastEditWasDelete;
+}
 var fontBase64 = null;
 function getFontBase64() {
   if (fontBase64)
@@ -455,6 +460,71 @@ function getFontBase64() {
 }
 function setFontBase64(b64) {
   fontBase64 = b64;
+}
+var spriteDataCache = /* @__PURE__ */ new Map();
+async function loadSpriteData(app, kind) {
+  if (spriteDataCache.has(kind))
+    return;
+  const tscnPath = app.vault.adapter.getResourcePath(
+    `.obsidian/plugins/${PLUGIN_ID}/media/animations/${kind}.tscn`
+  );
+  const pngPath = app.vault.adapter.getResourcePath(
+    `.obsidian/plugins/${PLUGIN_ID}/media/animations/${kind}.png`
+  );
+  const [tscnResp, pngResp] = await Promise.all([
+    (0, import_obsidian4.requestUrl)({ url: tscnPath }),
+    (0, import_obsidian4.requestUrl)({ url: pngPath })
+  ]);
+  const tscnText = tscnResp.text;
+  const pngBytes = new Uint8Array(pngResp.arrayBuffer);
+  let binary = "";
+  for (let i = 0; i < pngBytes.length; i++) {
+    binary += String.fromCharCode(pngBytes[i]);
+  }
+  const pngB64 = btoa(binary);
+  const atlasMap = /* @__PURE__ */ new Map();
+  const atlasBlocks = [...tscnText.matchAll(/\[sub_resource\s+type="AtlasTexture"\s+id="(.*?)"\][\s\S]*?region\s*=\s*Rect2\(([^\)]*)\)/g)];
+  for (const m of atlasBlocks) {
+    const id = m[1];
+    const nums = m[2].split(",").map((s) => parseFloat(s.trim()));
+    if (nums.length >= 4)
+      atlasMap.set(id, { x: nums[0], y: nums[1], w: nums[2], h: nums[3] });
+  }
+  const framesOrder = [];
+  const animBlock = tscnText.match(/\[sub_resource\s+type="SpriteFrames"[\s\S]*?animations\s*=\s*\[(\{[\s\S]*?\})\][\s\S]*?\n/);
+  if (animBlock) {
+    const block = animBlock[1];
+    const subResRefs = [...block.matchAll(/SubResource\("(.*?)"\)/g)];
+    for (const sr of subResRefs)
+      framesOrder.push(sr[1]);
+  }
+  const speedMatch = tscnText.match(/"speed"\s*:\s*([0-9.]+)/);
+  const fps = speedMatch ? Math.max(1, parseFloat(speedMatch[1])) : 24;
+  const frames = [];
+  for (const id of framesOrder) {
+    const rect = atlasMap.get(id);
+    if (rect)
+      frames.push(rect);
+  }
+  if (!frames.length && atlasMap.size)
+    frames.push(...[...atlasMap.values()]);
+  let sheetW = 0, sheetH = 0;
+  for (const f of frames) {
+    sheetW = Math.max(sheetW, f.x + f.w);
+    sheetH = Math.max(sheetH, f.y + f.h);
+  }
+  const frameMs = Math.max(10, Math.round(1e3 / fps));
+  const frameUris = frames.map((f) => {
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f.w} ${f.h}" width="${f.w}" height="${f.h}">
+  <image href="data:image/png;base64,${pngB64}" x="-${f.x}" y="-${f.y}" width="${sheetW}" height="${sheetH}" preserveAspectRatio="none"/>
+</svg>`;
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+  });
+  spriteDataCache.set(kind, { frames, sheetW, sheetH, fps, frameMs, pngBase64: pngB64, frameUris });
+}
+function getSpriteData(kind) {
+  return spriteDataCache.get(kind);
 }
 var FloatingLabelWidget = class extends import_view.WidgetType {
   constructor(text, color, fontSize, ttl) {
@@ -558,6 +628,72 @@ var IconWidget = class extends import_view.WidgetType {
     }
   }
 };
+var SpriteIconWidget = class extends import_view.WidgetType {
+  constructor(spriteData, kind) {
+    super();
+    this.currentFrame = 0;
+    this.imgEl = null;
+    this.domEl = null;
+    this.frameTimer = null;
+    this.spriteData = spriteData;
+    this.kind = kind;
+  }
+  toDOM(_view) {
+    const wrap = document.createElement("span");
+    wrap.className = "rc-widget-container";
+    const img = document.createElement("img");
+    img.className = `rc-icon rc-icon-${this.kind} rc-sprite-icon`;
+    img.src = this.spriteData.frameUris[0];
+    switch (this.kind) {
+      case "blip":
+        img.style.width = "18px";
+        img.style.height = "18px";
+        break;
+      case "boom":
+        img.style.width = "32px";
+        img.style.height = "32px";
+        break;
+      case "newline":
+        img.style.width = "14px";
+        img.style.height = "14px";
+        break;
+    }
+    this.imgEl = img;
+    wrap.appendChild(img);
+    this.domEl = wrap;
+    this.startFrameAnim();
+    return wrap;
+  }
+  startFrameAnim() {
+    const { frameMs } = this.spriteData;
+    const total = this.spriteData.frameUris.length;
+    if (total <= 1)
+      return;
+    const tick = () => {
+      if (!this.imgEl || !this.domEl)
+        return;
+      this.currentFrame++;
+      if (this.currentFrame >= total)
+        return;
+      this.imgEl.src = this.spriteData.frameUris[this.currentFrame];
+      this.frameTimer = window.setTimeout(tick, frameMs);
+    };
+    this.frameTimer = window.setTimeout(tick, frameMs);
+  }
+  setTransform(y, s) {
+    if (this.domEl) {
+      this.domEl.style.transform = `translateY(${y}em) scale(${s})`;
+    }
+  }
+  destroy(_dom) {
+    if (this.frameTimer !== null) {
+      window.clearTimeout(this.frameTimer);
+      this.frameTimer = null;
+    }
+    this.imgEl = null;
+    this.domEl = null;
+  }
+};
 var _RidiculousViewPlugin = class {
   constructor(view, settings) {
     this.decorations = import_view.Decoration.none;
@@ -582,6 +718,15 @@ var _RidiculousViewPlugin = class {
     const b = Math.min(255, Math.round(Math.random() * 510));
     return `rgb(${Math.min(255, r)}, ${Math.min(255, g)}, ${Math.min(255, b)})`;
   }
+  getEditorFontSizePx() {
+    try {
+      const cssFontSize = this.view.dom.style.fontSize || getComputedStyle(this.view.dom).fontSize;
+      const px = parseFloat(cssFontSize);
+      return Math.max(8, isNaN(px) ? 14 : px);
+    } catch (e) {
+      return 14;
+    }
+  }
   update(update) {
     if (!update.docChanged)
       return;
@@ -591,9 +736,11 @@ var _RidiculousViewPlugin = class {
           const insertedText = inserted.toString();
           const removedLength = toA - fromA;
           if (insertedText.length > 0 && !this.settings.reducedEffects) {
+            lastEditWasDelete = false;
             this.handleInsert(toB, insertedText);
           }
           if (removedLength > 0 && !this.settings.reducedEffects) {
+            lastEditWasDelete = true;
             this.handleDelete(fromA);
           }
         }
@@ -666,12 +813,17 @@ var _RidiculousViewPlugin = class {
           ttl = _RidiculousViewPlugin.TRAIL_BLIP_MS;
           const color = _RidiculousViewPlugin.randomGodotColor();
           if (effect.charLabel && this.settings.chars) {
-            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, ttl);
+            const widget = new FloatingLabelWidget(effect.charLabel, color, this.getEditorFontSizePx(), ttl);
             itemDecorations.push(
               import_view.Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
-          iconWidget = new IconWidget("blip");
+          const blipSprite = getSpriteData("blip");
+          if (blipSprite) {
+            iconWidget = new SpriteIconWidget(blipSprite, "blip");
+          } else {
+            iconWidget = new IconWidget("blip");
+          }
           itemDecorations.push(
             import_view.Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
@@ -681,12 +833,17 @@ var _RidiculousViewPlugin = class {
           ttl = _RidiculousViewPlugin.TRAIL_BOOM_MS;
           if (effect.charLabel && this.settings.chars) {
             const color = _RidiculousViewPlugin.randomGodotColor();
-            const widget = new FloatingLabelWidget(effect.charLabel, color, 18, ttl);
+            const widget = new FloatingLabelWidget(effect.charLabel, color, this.getEditorFontSizePx(), ttl);
             itemDecorations.push(
               import_view.Decoration.widget({ widget, side: 1 }).range(cursorPos, cursorPos)
             );
           }
-          iconWidget = new IconWidget("boom");
+          const boomSprite = getSpriteData("boom");
+          if (boomSprite) {
+            iconWidget = new SpriteIconWidget(boomSprite, "boom");
+          } else {
+            iconWidget = new IconWidget("boom");
+          }
           itemDecorations.push(
             import_view.Decoration.widget({ widget: iconWidget, side: 1 }).range(cursorPos, cursorPos)
           );
@@ -694,7 +851,12 @@ var _RidiculousViewPlugin = class {
         }
         case "newline": {
           ttl = _RidiculousViewPlugin.TRAIL_NEWLINE_MS;
-          iconWidget = new IconWidget("newline");
+          const newlineSprite = getSpriteData("newline");
+          if (newlineSprite) {
+            iconWidget = new SpriteIconWidget(newlineSprite, "newline");
+          } else {
+            iconWidget = new IconWidget("newline");
+          }
           itemDecorations.push(
             import_view.Decoration.widget({ widget: iconWidget, side: -1 }).range(pos, pos)
           );
@@ -877,12 +1039,13 @@ function createRidiculousPlugin(settings) {
 }
 
 // src/main.ts
-var _RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
+var _RidiculousCodingPlugin = class extends import_obsidian5.Plugin {
   constructor() {
     super(...arguments);
     this.statusBarItem = null;
     this.pitchIncrease = 0;
     this.pitchResetTimer = null;
+    this.oldReducedEffects = false;
   }
   getPanel() {
     var _a, _b;
@@ -898,7 +1061,7 @@ var _RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
       const fontPath = this.app.vault.adapter.getResourcePath(
         `.obsidian/plugins/${PLUGIN_ID}/media/font/GravityBold8.ttf`
       );
-      const resp = await (0, import_obsidian4.requestUrl)({ url: fontPath });
+      const resp = await (0, import_obsidian5.requestUrl)({ url: fontPath });
       const bytes = new Uint8Array(resp.arrayBuffer);
       let binary = "";
       for (let i = 0; i < bytes.length; i++) {
@@ -907,6 +1070,15 @@ var _RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
       setFontBase64(btoa(binary));
     } catch (e) {
       console.warn("Ridiculous Coding: Failed to load font, falling back to monospace");
+    }
+    try {
+      await Promise.all([
+        loadSpriteData(this.app, "blip"),
+        loadSpriteData(this.app, "boom"),
+        loadSpriteData(this.app, "newline")
+      ]);
+    } catch (e) {
+      console.warn("Ridiculous Coding: Failed to load sprite data, falling back to static SVG icons", e);
     }
     this.registerCodeMirrorPlugin();
     this.registerEditorEvents();
@@ -949,6 +1121,7 @@ var _RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
         (_a = this.getPanel()) == null ? void 0 : _a.refresh();
       }
     });
+    this.oldReducedEffects = this.settings.reducedEffects;
   }
   registerCodeMirrorPlugin() {
     const cmExtension = createRidiculousPlugin(this.settings);
@@ -972,7 +1145,11 @@ var _RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
         );
         const pitch = 1 + Math.min(20, this.pitchIncrease) * 0.05;
         if (!this.settings.reducedEffects && this.settings.sound) {
-          this.audioService.play({ type: "blip", pitch });
+          if (wasLastEditDelete()) {
+            this.audioService.play({ type: "boom" });
+          } else {
+            this.audioService.play({ type: "blip", pitch });
+          }
         }
         if (leveledUp && !this.settings.reducedEffects && this.settings.fireworks) {
           this.fireworks.show();
@@ -1014,6 +1191,10 @@ var _RidiculousCodingPlugin = class extends import_obsidian4.Plugin {
     this.audioService.isEnabled = this.settings.sound;
     this.updateStatusBar();
     (_a = this.getPanel()) == null ? void 0 : _a.refresh();
+    if (!this.oldReducedEffects && this.settings.reducedEffects) {
+      this.clearAllDecorations();
+    }
+    this.oldReducedEffects = this.settings.reducedEffects;
   }
   onunload() {
     this.clearAllDecorations();
