@@ -1,6 +1,7 @@
 # Ridiculous Coding for Obsidian
 
 Transform your Obsidian editing into an epic adventure! Blips, booms, screen shake, XP levels, and fireworks — every keystroke counts.
+
 ## Features
 
 - **Blips** — Colorful animations when typing characters
@@ -54,5 +55,3 @@ Copy `main.js`, `manifest.json`, `styles.css`, and the `media/` folder to your v
 ## License
 
 MIT
-
-vdddddddddd
