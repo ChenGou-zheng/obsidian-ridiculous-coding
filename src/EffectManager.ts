@@ -223,7 +223,7 @@ class RidiculousViewPluginClass {
       }
       const y = -(1.1 + floatEm * progress);
       const s = 1.6 + scaleAdd * progress;
-      label.style.transform = `translateY(${y}em) scale(${s})`;
+      label.setCssProps({ transform: `translateY(${y}em) scale(${s})` });
       window.requestAnimationFrame(tick);
     };
     window.requestAnimationFrame(tick);
@@ -283,12 +283,12 @@ class RidiculousViewPluginClass {
     const tick = () => {
       if (Date.now() >= this.shakeEndAt) {
         this.shakeTimerId = null;
-        this.view.dom.style.transform = "";
+        this.view.dom.setCssProps({ transform: "" });
         return;
       }
       const amp = this.settings.shakeAmplitude;
       const angle = Math.random() * Math.PI * 2;
-      this.view.dom.style.transform = `translate(${Math.round(Math.cos(angle) * amp)}px, ${Math.round(Math.sin(angle) * amp)}px)`;
+      this.view.dom.setCssProps({ transform: `translate(${Math.round(Math.cos(angle) * amp)}px, ${Math.round(Math.sin(angle) * amp)}px)` });
       this.shakeTimerId = window.setTimeout(tick, RATE_LIMITS.SHAKE_FRAME_MS);
     };
     tick();
@@ -300,7 +300,7 @@ class RidiculousViewPluginClass {
       this.shakeTimerId = null;
     }
     this.shakeEndAt = 0;
-    this.view.dom.style.transform = "";
+    this.view.dom.setCssProps({ transform: "" });
   }
 
   // ── CM6 ViewPlugin lifecycle ──
